@@ -199,30 +199,38 @@ body {
   align-items: center;
 }
 
-.toolbar-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.toolbar-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .is-hidden {
-  display: none;
+  display: none !important;
+}
+
+.properties-controls {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.property-group {
+  display: grid;
+  gap: 8px;
+}
+
+.property-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.property-row label {
+  font-size: 13px;
 }
 
 #toolSize {
-  width: 180px;
+  width: 100%;
 }
 
 #brushOpacity {
-  width: 120px;
+  width: 100%;
 }
 
 #brushColor {
@@ -246,6 +254,7 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding-left: 66px;
 }
 
 .swatch-btn {

@@ -50,25 +50,6 @@
           <div class="toolbar-top">
             <span id="activeToolLabel">Active Tool: Brush</span>
           </div>
-          <div class="toolbar-controls">
-            <label for="toolSize">Size</label>
-            <input id="toolSize" type="range" min="1" max="64" value="8" />
-            <span id="toolSizeValue">8</span>
-            <div id="colorControls" class="toolbar-group">
-              <label for="brushColor">Color</label>
-              <input id="brushColor" type="color" value="#2f2f2f" />
-              <label for="brushOpacity">Opacity</label>
-              <input id="brushOpacity" type="range" min="10" max="100" value="100" />
-              <span id="brushOpacityValue">100%</span>
-              <div class="color-swatches" aria-label="Quick brush colors">
-                <button type="button" class="swatch-btn" data-color="#2f2f2f" style="background:#2f2f2f" aria-label="Dark gray"></button>
-                <button type="button" class="swatch-btn" data-color="#d13b3b" style="background:#d13b3b" aria-label="Red"></button>
-                <button type="button" class="swatch-btn" data-color="#2a7f62" style="background:#2a7f62" aria-label="Green"></button>
-                <button type="button" class="swatch-btn" data-color="#2f5fb8" style="background:#2f5fb8" aria-label="Blue"></button>
-                <button type="button" class="swatch-btn" data-color="#b98428" style="background:#b98428" aria-label="Sand"></button>
-              </div>
-            </div>
-          </div>
         </div>
         <div class="canvas-wrap">
           <canvas id="mapCanvas" width="1200" height="800" aria-label="Map canvas"></canvas>
@@ -94,7 +75,31 @@
 
         <section class="panel">
           <h2>Properties</h2>
-          <div class="placeholder">Select a tool or layer to see settings.</div>
+          <div class="properties-controls">
+            <div class="property-row">
+              <label for="toolSize">Size</label>
+              <input id="toolSize" type="range" min="1" max="64" value="8" />
+              <span id="toolSizeValue">8</span>
+            </div>
+            <div id="colorControls" class="property-group">
+              <div class="property-row">
+                <label for="brushColor">Color</label>
+                <input id="brushColor" type="color" value="#2f2f2f" />
+              </div>
+              <div class="property-row">
+                <label for="brushOpacity">Opacity</label>
+                <input id="brushOpacity" type="range" min="10" max="100" value="100" />
+                <span id="brushOpacityValue">100%</span>
+              </div>
+              <div class="color-swatches" aria-label="Quick brush colors">
+                <button type="button" class="swatch-btn" data-color="#2f2f2f" style="background:#2f2f2f" aria-label="Dark gray"></button>
+                <button type="button" class="swatch-btn" data-color="#d13b3b" style="background:#d13b3b" aria-label="Red"></button>
+                <button type="button" class="swatch-btn" data-color="#2a7f62" style="background:#2a7f62" aria-label="Green"></button>
+                <button type="button" class="swatch-btn" data-color="#2f5fb8" style="background:#2f5fb8" aria-label="Blue"></button>
+                <button type="button" class="swatch-btn" data-color="#b98428" style="background:#b98428" aria-label="Sand"></button>
+              </div>
+            </div>
+          </div>
         </section>
       </aside>
     </main>
