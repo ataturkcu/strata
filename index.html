@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Strata</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <header class="menu-bar">
+      <div class="brand">Strata</div>
+      <nav class="menu-items" aria-label="Main menu">
+        <button type="button" class="menu-item">File</button>
+        <button type="button" class="menu-item">Edit</button>
+        <button type="button" class="menu-item">View</button>
+        <button type="button" class="menu-item">Donate</button>
+        <button type="button" class="menu-item" id="aboutButton">About</button>
+      </nav>
+    </header>
+
+    <main class="workspace">
+      <aside class="sidebar left" aria-label="Tools panel">
+        <section class="panel">
+          <h2>Drawing Tools</h2>
+          <div class="tool-list">
+            <button type="button" class="tool-btn is-active" data-tool="brush">Brush</button>
+            <button type="button" class="tool-btn" data-tool="rectangle">Rectangle</button>
+            <button type="button" class="tool-btn" data-tool="line">Line</button>
+            <button type="button" class="tool-btn" data-tool="fill">Fill / Bucket</button>
+            <button type="button" class="tool-btn" data-tool="eraser">Eraser</button>
+            <button type="button" class="tool-btn" data-tool="shape">Shape</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Terrain Tools</h2>
+          <div class="tool-list">
+            <button type="button" class="tool-btn" data-tool="height-brush">Height Brush</button>
+            <button type="button" class="tool-btn" data-tool="slope">Slope</button>
+            <button type="button" class="tool-btn" data-tool="smooth">Smooth</button>
+            <button type="button" class="tool-btn" data-tool="biome-paint">Biome Paint</button>
+          </div>
+          <div class="panel-meta" id="mouseCoords">Mouse: x -, y -</div>
+        </section>
+      </aside>
+
+      <section class="editor" aria-label="Editor">
+        <div class="editor-toolbar">
+          <div class="toolbar-top">
+            <span id="activeToolLabel">Active Tool: Brush</span>
+          </div>
+          <div class="toolbar-controls">
+            <label for="toolSize">Size</label>
+            <input id="toolSize" type="range" min="1" max="64" value="8" />
+            <span id="toolSizeValue">8</span>
+            <span class="tool-option-hint" id="toolOptionHint">Tool options: coming later</span>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="mapCanvas" width="1200" height="800" aria-label="Map canvas"></canvas>
+        </div>
+      </section>
+
+      <aside class="sidebar right" aria-label="Layers and properties panel">
+        <section class="panel">
+          <h2>Layers</h2>
+          <ul class="layer-list">
+            <li><button type="button" class="layer-btn is-active" data-layer="terrain">Terrain Layer</button></li>
+            <li><button type="button" class="layer-btn" data-layer="object">Object Layer</button></li>
+            <li><button type="button" class="layer-btn" data-layer="collision">Collision Layer</button></li>
+            <li><button type="button" class="layer-btn" data-layer="detail">Detail Layer</button></li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Objects</h2>
+          <div class="placeholder">Tile / asset tools will be added later.</div>
+        </section>
+
+        <section class="panel">
+          <h2>Properties</h2>
+          <div class="placeholder">Select a tool or layer to see settings.</div>
+        </section>
+      </aside>
+    </main>
+
+    <div class="modal" id="aboutModal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+        <div class="modal-header">
+          <h2 id="aboutTitle">About Strata</h2>
+          <button type="button" class="modal-close" id="aboutCloseButton" aria-label="Close about popup">Close</button>
+        </div>
+        <div class="modal-body">
+          <p>Version 0.0.1</p>
+          <p>Made by <a href="https://github.com/ataturkcu" target="_blank" rel="noopener noreferrer">ataturkcu</a></p>
+          <p>Licensed under MIT: <a href="https://github.com/ataturkcu/strata/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">View License</a></p>
+        </div>
+      </div>
+    </div>
+
+    <script src="js/app.js"></script>
+  </body>
+</html>
