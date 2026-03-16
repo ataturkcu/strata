@@ -4,7 +4,11 @@ const activeToolLabel = document.getElementById('activeToolLabel');
 const mouseCoords = document.getElementById('mouseCoords');
 const toolSize = document.getElementById('toolSize');
 const toolSizeValue = document.getElementById('toolSizeValue');
-const toolOptionHint = document.getElementById('toolOptionHint');
+const brushColorInput = document.getElementById('brushColor');
+const brushOpacityInput = document.getElementById('brushOpacity');
+const brushOpacityValue = document.getElementById('brushOpacityValue');
+const swatchButtons = document.querySelectorAll('.swatch-btn');
+const colorControls = document.getElementById('colorControls');
 const optionsButton = document.getElementById('optionsButton');
 const optionsModal = document.getElementById('optionsModal');
 const optionsCloseButton = document.getElementById('optionsCloseButton');
@@ -20,6 +24,8 @@ const context = canvas.getContext('2d');
 let isDrawing = false;
 let currentTool = 'brush';
 let currentSize = Number(toolSize.value);
+let currentColor = brushColorInput.value;
+let currentOpacity = Number(brushOpacityInput.value) / 100;
 let hasPendingStrokeChange = false;
 
 let maxHistoryStates = 20;
@@ -100,12 +106,51 @@ function isEraserTool(tool) {
   return tool === 'eraser';
 }
 
+function hexToRgb(hex) {
+  const value = hex.replace('#', '');
+  const normalized = value.length === 3 ? value.split('').map((char) => char + char).join('') : value;
+  const parsed = Number.parseInt(normalized, 16);
+
+  return {
+    r: (parsed >> 16) & 255,
+    g: (parsed >> 8) & 255,
+    b: parsed & 255,
+  };
+}
+
+function syncSwatchSelection() {
+  swatchButtons.forEach((button) => {
+    button.classList.toggle('is-selected', button.dataset.color?.toLowerCase() === currentColor.toLowerCase());
+  });
+}
+
+function updateBrushAppearance() {
+  brushColorInput.value = currentColor;
+  brushOpacityValue.textContent = `${Math.round(currentOpacity * 100)}%`;
+  const rgb = hexToRgb(currentColor);
+  brushPreview.style.borderColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.95)`;
+  brushPreview.style.background = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${Math.max(0.08, currentOpacity * 0.2)})`;
+  syncSwatchSelection();
+}
+
 function updateCanvasCursor() {
   if (isEraserTool(currentTool)) {
     canvas.style.cursor = eraserCursor;
     return;
   }
   canvas.style.cursor = pencilCursor;
+}
+
+function isColorTool(tool) {
+  return tool === 'brush' || tool === 'line' || tool === 'rectangle' || tool === 'fill' || tool === 'shape';
+}
+
+function updateColorControlsVisibility() {
+  if (isColorTool(currentTool)) {
+    colorControls.classList.remove('is-hidden');
+    return;
+  }
+  colorControls.classList.add('is-hidden');
 }
 
 function getToolStrokeSize() {
@@ -153,17 +198,7 @@ toolButtons.forEach((button) => {
     currentTool = tool;
     setActive(toolButtons, button, 'is-active');
     activeToolLabel.textContent = `Active Tool: ${button.textContent}`;
-    if (tool === 'rectangle') {
-      toolOptionHint.textContent = 'Tool options: rectangle shape coming later';
-      updateCanvasCursor();
-      return;
-    }
-    if (tool === 'shape') {
-      toolOptionHint.textContent = 'Tool options: shape variants coming later';
-      updateCanvasCursor();
-      return;
-    }
-    toolOptionHint.textContent = 'Tool options: coming later';
+    updateColorControlsVisibility();
     updateCanvasCursor();
   });
 });
@@ -218,6 +253,7 @@ function draw(event) {
     hasPendingStrokeChange = true;
     context.save();
     context.globalCompositeOperation = 'destination-out';
+    context.globalAlpha = 1;
     context.beginPath();
     context.arc(x, y, currentSize / 2, 0, Math.PI * 2);
     context.fill();
@@ -226,9 +262,10 @@ function draw(event) {
   }
 
   context.globalCompositeOperation = 'source-over';
+  context.globalAlpha = currentOpacity;
   context.lineCap = 'round';
   context.lineJoin = 'round';
-  context.strokeStyle = '#2f2f2f';
+  context.strokeStyle = currentColor;
   context.lineWidth = getToolStrokeSize();
   hasPendingStrokeChange = true;
 
@@ -241,6 +278,26 @@ function draw(event) {
 toolSize.addEventListener('input', () => {
   currentSize = Number(toolSize.value);
   toolSizeValue.textContent = String(currentSize);
+});
+
+brushColorInput.addEventListener('input', () => {
+  currentColor = brushColorInput.value;
+  updateBrushAppearance();
+  localStorage.setItem('strata-brush-color', currentColor);
+});
+
+brushOpacityInput.addEventListener('input', () => {
+  currentOpacity = Number(brushOpacityInput.value) / 100;
+  updateBrushAppearance();
+  localStorage.setItem('strata-brush-opacity', String(Math.round(currentOpacity * 100)));
+});
+
+swatchButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    currentColor = button.dataset.color || currentColor;
+    updateBrushAppearance();
+    localStorage.setItem('strata-brush-color', currentColor);
+  });
 });
 
 canvas.addEventListener('pointerdown', startDraw);
@@ -338,6 +395,17 @@ function clearCanvas() {
 const savedTheme = localStorage.getItem('strata-theme') || 'dark';
 applyTheme(savedTheme);
 
+const savedBrushColor = localStorage.getItem('strata-brush-color');
+if (savedBrushColor) {
+  currentColor = savedBrushColor;
+}
+
+const savedBrushOpacity = Number(localStorage.getItem('strata-brush-opacity') || '100');
+if (!Number.isNaN(savedBrushOpacity)) {
+  currentOpacity = Math.min(1, Math.max(0.1, savedBrushOpacity / 100));
+  brushOpacityInput.value = String(Math.round(currentOpacity * 100));
+}
+
 const savedHistoryStates = Number(localStorage.getItem('strata-history-states') || '20');
 if (!Number.isNaN(savedHistoryStates)) {
   setHistoryStateCount(savedHistoryStates);
@@ -347,4 +415,6 @@ if (!Number.isNaN(savedHistoryStates)) {
 
 clearCanvas();
 pushHistoryState();
+updateBrushAppearance();
+updateColorControlsVisibility();
 updateCanvasCursor();

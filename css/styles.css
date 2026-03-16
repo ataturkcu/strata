@@ -206,16 +206,58 @@ body {
   flex-wrap: wrap;
 }
 
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.is-hidden {
+  display: none;
+}
+
 #toolSize {
   width: 180px;
+}
+
+#brushOpacity {
+  width: 120px;
+}
+
+#brushColor {
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  cursor: pointer;
 }
 
 #toolSizeValue {
   min-width: 20px;
 }
 
-.tool-option-hint {
-  color: var(--muted);
+#brushOpacityValue {
+  min-width: 44px;
+}
+
+.color-swatches {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.swatch-btn {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--panel-border);
+  cursor: pointer;
+}
+
+.swatch-btn.is-selected {
+  outline: 2px solid var(--active-border);
+  outline-offset: 1px;
 }
 
 .canvas-wrap {
