@@ -5,6 +5,7 @@ const mouseCoords = document.getElementById('mouseCoords');
 const toolSize = document.getElementById('toolSize');
 const toolSizeValue = document.getElementById('toolSizeValue');
 const toolOptionHint = document.getElementById('toolOptionHint');
+const themeToggleButton = document.getElementById('themeToggleButton');
 const aboutButton = document.getElementById('aboutButton');
 const aboutModal = document.getElementById('aboutModal');
 const aboutCloseButton = document.getElementById('aboutCloseButton');
@@ -15,6 +16,17 @@ const context = canvas.getContext('2d');
 let isDrawing = false;
 let currentTool = 'brush';
 let currentSize = Number(toolSize.value);
+
+function applyTheme(theme) {
+  document.body.dataset.theme = theme;
+  themeToggleButton.textContent = theme === 'dark' ? 'Theme: Dark' : 'Theme: Light';
+}
+
+function toggleTheme() {
+  const nextTheme = document.body.dataset.theme === 'dark' ? 'light' : 'dark';
+  applyTheme(nextTheme);
+  localStorage.setItem('strata-theme', nextTheme);
+}
 
 function createEmojiCursor(emoji, x = 6, y = 20) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><text x="2" y="24" font-size="22">${emoji}</text></svg>`;
@@ -203,6 +215,11 @@ window.addEventListener('keydown', (event) => {
 function clearCanvas() {
   context.clearRect(0, 0, canvas.width, canvas.height);
 }
+
+themeToggleButton.addEventListener('click', toggleTheme);
+
+const savedTheme = localStorage.getItem('strata-theme') || 'dark';
+applyTheme(savedTheme);
 
 clearCanvas();
 updateCanvasCursor();
