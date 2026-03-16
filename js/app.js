@@ -16,6 +16,51 @@ const context = canvas.getContext('2d');
 let isDrawing = false;
 let currentTool = 'brush';
 let currentSize = Number(toolSize.value);
+let hasPendingStrokeChange = false;
+
+const maxHistoryStates = 20;
+const undoStack = [];
+const redoStack = [];
+
+function getCanvasSnapshot() {
+  return context.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+function restoreCanvasSnapshot(snapshot) {
+  context.putImageData(snapshot, 0, 0);
+}
+
+function pushHistoryState() {
+  undoStack.push(getCanvasSnapshot());
+  if (undoStack.length > maxHistoryStates) {
+    undoStack.shift();
+  }
+}
+
+function commitHistoryState() {
+  pushHistoryState();
+  redoStack.length = 0;
+}
+
+function undo() {
+  if (undoStack.length <= 1) {
+    return;
+  }
+
+  const current = undoStack.pop();
+  redoStack.push(current);
+  restoreCanvasSnapshot(undoStack[undoStack.length - 1]);
+}
+
+function redo() {
+  if (redoStack.length === 0) {
+    return;
+  }
+
+  const next = redoStack.pop();
+  undoStack.push(next);
+  restoreCanvasSnapshot(next);
+}
 
 function applyTheme(theme) {
   document.body.dataset.theme = theme;
@@ -127,6 +172,7 @@ function getCanvasPosition(event) {
 
 function startDraw(event) {
   isDrawing = true;
+  hasPendingStrokeChange = false;
   updateCanvasCursor();
   const { x, y } = getCanvasPosition(event);
   context.beginPath();
@@ -135,7 +181,11 @@ function startDraw(event) {
 }
 
 function endDraw() {
+  if (isDrawing && hasPendingStrokeChange) {
+    commitHistoryState();
+  }
   isDrawing = false;
+  hasPendingStrokeChange = false;
   context.beginPath();
   updateCanvasCursor();
 }
@@ -150,6 +200,7 @@ function draw(event) {
   }
 
   if (currentTool === 'eraser') {
+    hasPendingStrokeChange = true;
     context.save();
     context.globalCompositeOperation = 'destination-out';
     context.beginPath();
@@ -164,6 +215,7 @@ function draw(event) {
   context.lineJoin = 'round';
   context.strokeStyle = '#2f2f2f';
   context.lineWidth = getToolStrokeSize();
+  hasPendingStrokeChange = true;
 
   context.lineTo(x, y);
   context.stroke();
@@ -209,6 +261,22 @@ aboutModal.addEventListener('click', (event) => {
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !aboutModal.hidden) {
     closeAboutModal();
+    return;
+  }
+
+  const isMacRedo = (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'z';
+  const isUndo = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'z';
+  const isRedo = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y';
+
+  if (isUndo) {
+    event.preventDefault();
+    undo();
+    return;
+  }
+
+  if (isRedo || isMacRedo) {
+    event.preventDefault();
+    redo();
   }
 });
 
@@ -222,4 +290,5 @@ const savedTheme = localStorage.getItem('strata-theme') || 'dark';
 applyTheme(savedTheme);
 
 clearCanvas();
+pushHistoryState();
 updateCanvasCursor();
