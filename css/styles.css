@@ -95,7 +95,7 @@ body {
   outline: none;
 }
 
-#themeToggleButton {
+#optionsButton {
   margin-left: auto;
 }
 
@@ -314,6 +314,41 @@ body {
 
 .modal-body a {
   color: var(--link);
+}
+
+.option-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.option-row label {
+  font-size: 13px;
+}
+
+.option-row input,
+.option-row select {
+  border: 1px solid var(--panel-border);
+  background: var(--panel-elev);
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.option-warning {
+  color: #c98a00;
+  font-size: 12px;
+}
+
+body[data-theme='dark'] .option-warning {
+  color: #ffbe55;
+}
+
+.option-coming {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 @media (max-width: 1100px) {

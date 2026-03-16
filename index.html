@@ -14,8 +14,8 @@
         <button type="button" class="menu-item">Edit</button>
         <button type="button" class="menu-item">View</button>
         <button type="button" class="menu-item">Donate</button>
+        <button type="button" class="menu-item" id="optionsButton">Options</button>
         <button type="button" class="menu-item" id="aboutButton">About</button>
-        <button type="button" class="menu-item" id="themeToggleButton">Theme: Dark</button>
       </nav>
     </header>
 
@@ -96,6 +96,30 @@
           <p>Version 0.0.1</p>
           <p>Made by <a href="https://github.com/ataturkcu" target="_blank" rel="noopener noreferrer">ataturkcu</a></p>
           <p>Licensed under MIT: <a href="https://github.com/ataturkcu/strata/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">View License</a></p>
+          <p>View source code: <a href="https://github.com/ataturkcu/strata" target="_blank" rel="noopener noreferrer">GitHub Repository</a></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="optionsModal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="optionsTitle">
+        <div class="modal-header">
+          <h2 id="optionsTitle">Options</h2>
+          <button type="button" class="modal-close" id="optionsCloseButton" aria-label="Close options popup">Close</button>
+        </div>
+        <div class="modal-body">
+          <div class="option-row">
+            <label for="themeSelect">Theme</label>
+            <select id="themeSelect">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+          </div>
+          <div class="option-row">
+            <label for="historyStatesInput">History States</label>
+            <input id="historyStatesInput" type="number" min="5" max="200" step="1" value="20" />
+          </div>
+          <p class="option-warning">Warning: history states depends on your memory so be careful while adjusting this!</p>
         </div>
       </div>
     </div>

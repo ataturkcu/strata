@@ -5,7 +5,11 @@ const mouseCoords = document.getElementById('mouseCoords');
 const toolSize = document.getElementById('toolSize');
 const toolSizeValue = document.getElementById('toolSizeValue');
 const toolOptionHint = document.getElementById('toolOptionHint');
-const themeToggleButton = document.getElementById('themeToggleButton');
+const optionsButton = document.getElementById('optionsButton');
+const optionsModal = document.getElementById('optionsModal');
+const optionsCloseButton = document.getElementById('optionsCloseButton');
+const themeSelect = document.getElementById('themeSelect');
+const historyStatesInput = document.getElementById('historyStatesInput');
 const aboutButton = document.getElementById('aboutButton');
 const aboutModal = document.getElementById('aboutModal');
 const aboutCloseButton = document.getElementById('aboutCloseButton');
@@ -18,9 +22,19 @@ let currentTool = 'brush';
 let currentSize = Number(toolSize.value);
 let hasPendingStrokeChange = false;
 
-const maxHistoryStates = 20;
+let maxHistoryStates = 20;
 const undoStack = [];
 const redoStack = [];
+
+function clampHistoryStateCount(value) {
+  return Math.min(200, Math.max(5, value));
+}
+
+function enforceHistoryLimit() {
+  while (undoStack.length > maxHistoryStates) {
+    undoStack.shift();
+  }
+}
 
 function getCanvasSnapshot() {
   return context.getImageData(0, 0, canvas.width, canvas.height);
@@ -32,9 +46,7 @@ function restoreCanvasSnapshot(snapshot) {
 
 function pushHistoryState() {
   undoStack.push(getCanvasSnapshot());
-  if (undoStack.length > maxHistoryStates) {
-    undoStack.shift();
-  }
+  enforceHistoryLimit();
 }
 
 function commitHistoryState() {
@@ -64,13 +76,16 @@ function redo() {
 
 function applyTheme(theme) {
   document.body.dataset.theme = theme;
-  themeToggleButton.textContent = theme === 'dark' ? 'Theme: Dark' : 'Theme: Light';
+  if (themeSelect) {
+    themeSelect.value = theme;
+  }
 }
 
-function toggleTheme() {
-  const nextTheme = document.body.dataset.theme === 'dark' ? 'light' : 'dark';
-  applyTheme(nextTheme);
-  localStorage.setItem('strata-theme', nextTheme);
+function setHistoryStateCount(value) {
+  maxHistoryStates = clampHistoryStateCount(value);
+  historyStatesInput.value = String(maxHistoryStates);
+  enforceHistoryLimit();
+  localStorage.setItem('strata-history-states', String(maxHistoryStates));
 }
 
 function createEmojiCursor(emoji, x = 6, y = 20) {
@@ -258,9 +273,45 @@ aboutModal.addEventListener('click', (event) => {
   }
 });
 
+function openOptionsModal() {
+  optionsModal.hidden = false;
+}
+
+function closeOptionsModal() {
+  optionsModal.hidden = true;
+}
+
+optionsButton.addEventListener('click', openOptionsModal);
+optionsCloseButton.addEventListener('click', closeOptionsModal);
+
+optionsModal.addEventListener('click', (event) => {
+  if (event.target === optionsModal) {
+    closeOptionsModal();
+  }
+});
+
+themeSelect.addEventListener('change', () => {
+  applyTheme(themeSelect.value);
+  localStorage.setItem('strata-theme', themeSelect.value);
+});
+
+historyStatesInput.addEventListener('change', () => {
+  const parsed = Number(historyStatesInput.value);
+  if (Number.isNaN(parsed)) {
+    historyStatesInput.value = String(maxHistoryStates);
+    return;
+  }
+  setHistoryStateCount(parsed);
+});
+
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !aboutModal.hidden) {
     closeAboutModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && !optionsModal.hidden) {
+    closeOptionsModal();
     return;
   }
 
@@ -284,10 +335,15 @@ function clearCanvas() {
   context.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-themeToggleButton.addEventListener('click', toggleTheme);
-
 const savedTheme = localStorage.getItem('strata-theme') || 'dark';
 applyTheme(savedTheme);
+
+const savedHistoryStates = Number(localStorage.getItem('strata-history-states') || '20');
+if (!Number.isNaN(savedHistoryStates)) {
+  setHistoryStateCount(savedHistoryStates);
+} else {
+  historyStatesInput.value = String(maxHistoryStates);
+}
 
 clearCanvas();
 pushHistoryState();
