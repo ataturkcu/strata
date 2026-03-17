@@ -73,6 +73,7 @@ let lineSnapshot = null;
 const minZoom = 0.25;
 const maxZoom = 4;
 const zoomStepFactor = 1.1;
+const fillTolerance = 0; // it is for clearing the flood fill "bleeding" effect, but it is causing problems so it is set to 0 not work.
 
 let maxHistoryStates = 20;
 const undoStack = [];
@@ -138,6 +139,10 @@ function setHistoryStateCount(value) {
   historyStatesInput.value = String(maxHistoryStates);
   enforceHistoryLimit();
   localStorage.setItem('strata-history-states', String(maxHistoryStates));
+}
+
+function getEffectiveFillTolerance() {
+  return fillTolerance;
 }
 
 function clampZoom(value) {
@@ -212,6 +217,7 @@ function createEmojiCursor(emoji, x = 6, y = 20) {
 
 const pencilCursor = createEmojiCursor('✏️');
 const eraserCursor = createEmojiCursor('🧽');
+const bucketCursor = createEmojiCursor('🪣');
 
 function isEraserTool(tool) {
   return tool === 'eraser';
@@ -227,6 +233,119 @@ function hexToRgb(hex) {
     g: (parsed >> 8) & 255,
     b: parsed & 255,
   };
+}
+
+function hexToFillColor(hex, opacity) {
+  const rgb = hexToRgb(hex);
+  return {
+    r: rgb.r,
+    g: rgb.g,
+    b: rgb.b,
+    a: Math.round(opacity * 255),
+  };
+}
+
+function colorsMatch(data, index, target, tolerance) {
+  if (tolerance <= 0) {
+    return (
+      data[index] === target.r &&
+      data[index + 1] === target.g &&
+      data[index + 2] === target.b &&
+      data[index + 3] === target.a
+    );
+  }
+
+  const dr = Math.abs(data[index] - target.r);
+  const dg = Math.abs(data[index + 1] - target.g);
+  const db = Math.abs(data[index + 2] - target.b);
+  const da = Math.abs(data[index + 3] - target.a);
+  const rgbDistance = dr + dg + db;
+  const alphaAllowance = Math.max(16, tolerance * 2);
+
+  return (
+    rgbDistance <= tolerance * 3 &&
+    da <= alphaAllowance
+  );
+}
+
+function setPixelColor(data, index, color) {
+  data[index] = color.r;
+  data[index + 1] = color.g;
+  data[index + 2] = color.b;
+  data[index + 3] = color.a;
+}
+
+function applyFillAt(x, y) {
+  const width = canvas.width;
+  const height = canvas.height;
+
+  if (x < 0 || y < 0 || x >= width || y >= height) {
+    return false;
+  }
+
+  const imageData = context.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  const startIndex = (y * width + x) * 4;
+
+  const target = {
+    r: data[startIndex],
+    g: data[startIndex + 1],
+    b: data[startIndex + 2],
+    a: data[startIndex + 3],
+  };
+
+  const fill = hexToFillColor(currentColor, currentOpacity);
+  if (
+    target.r === fill.r &&
+    target.g === fill.g &&
+    target.b === fill.b &&
+    target.a === fill.a
+  ) {
+    return false;
+  }
+
+  const start = y * width + x;
+  const stack = [start];
+  const visited = new Uint8Array(width * height);
+  const tolerance = getEffectiveFillTolerance();
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined) {
+      continue;
+    }
+
+    if (visited[current] === 1) {
+      continue;
+    }
+    visited[current] = 1;
+
+    const px = current % width;
+    const py = (current - px) / width;
+
+    const index = current * 4;
+    if (!colorsMatch(data, index, target, tolerance)) {
+      continue;
+    }
+
+    setPixelColor(data, index, fill);
+
+    if (px > 0) {
+      stack.push(current - 1);
+    }
+    if (px < width - 1) {
+      stack.push(current + 1);
+    }
+    if (py > 0) {
+      stack.push(current - width);
+    }
+    if (py < height - 1) {
+      stack.push(current + width);
+    }
+  }
+
+  context.putImageData(imageData, 0, 0);
+  return true;
 }
 
 function syncSwatchSelection() {
@@ -262,6 +381,10 @@ function updateCanvasCursor() {
 
   if (isEraserTool(currentTool)) {
     canvas.style.cursor = eraserCursor;
+    return;
+  }
+  if (currentTool === 'fill') {
+    canvas.style.cursor = bucketCursor;
     return;
   }
   canvas.style.cursor = pencilCursor;
@@ -409,6 +532,18 @@ function startDraw(event) {
     lineStartX = x;
     lineStartY = y;
     lineSnapshot = getCanvasSnapshot();
+    return;
+  }
+
+  if (currentTool === 'fill') {
+    const pixelX = Math.floor(x);
+    const pixelY = Math.floor(y);
+    const changed = applyFillAt(pixelX, pixelY);
+    if (changed) {
+      commitHistoryState();
+    }
+    isDrawing = false;
+    releasePointerIfCaptured();
     return;
   }
 
