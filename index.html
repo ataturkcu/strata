@@ -15,6 +15,7 @@
         <button type="button" class="menu-item" id="viewButton">View</button>
         <button type="button" class="menu-item">Donate</button>
         <button type="button" class="menu-item" id="optionsButton">Options</button>
+        <button type="button" class="menu-item" id="shortcutsButton">Shortcuts</button>
         <button type="button" class="menu-item" id="aboutButton">About</button>
       </nav>
     </header>
@@ -117,6 +118,23 @@
           <p>Made by <a href="https://github.com/ataturkcu" target="_blank" rel="noopener noreferrer">ataturkcu</a></p>
           <p>Licensed under MIT: <a href="https://github.com/ataturkcu/strata/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">View License</a></p>
           <p>View source code: <a href="https://github.com/ataturkcu/strata" target="_blank" rel="noopener noreferrer">GitHub Repository</a></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="shortcutsModal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
+        <div class="modal-header">
+          <h2 id="shortcutsTitle">Shortcuts</h2>
+          <button type="button" class="modal-close" id="shortcutsCloseButton" aria-label="Close shortcuts popup">Close</button>
+        </div>
+        <div class="modal-body">
+          <p>Ctrl + Z / Cmd + Z: Undo</p>
+          <p>Ctrl + Y: Redo</p>
+          <p>Ctrl + Shift + Z / Cmd + Shift + Z: Redo</p>
+          <p>Ctrl + Mouse Wheel / Cmd + Mouse Wheel: Zoom In/Out</p>
+          <p>Shift + Left Mouse Button Drag: Pan view</p>
+          <p>Escape: Close open popup</p>
         </div>
       </div>
     </div>

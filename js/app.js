@@ -25,6 +25,9 @@ const terrainWidthInput = document.getElementById('terrainWidthInput');
 const terrainHeightInput = document.getElementById('terrainHeightInput');
 const terrainDividerInput = document.getElementById('terrainDividerInput');
 const terrainSizeApplyButton = document.getElementById('terrainSizeApplyButton');
+const shortcutsButton = document.getElementById('shortcutsButton');
+const shortcutsModal = document.getElementById('shortcutsModal');
+const shortcutsCloseButton = document.getElementById('shortcutsCloseButton');
 const aboutButton = document.getElementById('aboutButton');
 const aboutModal = document.getElementById('aboutModal');
 const aboutCloseButton = document.getElementById('aboutCloseButton');
@@ -505,6 +508,23 @@ aboutModal.addEventListener('click', (event) => {
   }
 });
 
+function openShortcutsModal() {
+  shortcutsModal.hidden = false;
+}
+
+function closeShortcutsModal() {
+  shortcutsModal.hidden = true;
+}
+
+shortcutsButton.addEventListener('click', openShortcutsModal);
+shortcutsCloseButton.addEventListener('click', closeShortcutsModal);
+
+shortcutsModal.addEventListener('click', (event) => {
+  if (event.target === shortcutsModal) {
+    closeShortcutsModal();
+  }
+});
+
 function openOptionsModal() {
   optionsModal.hidden = false;
 }
@@ -617,6 +637,11 @@ window.addEventListener('keydown', (event) => {
 
   if (event.key === 'Escape' && !aboutModal.hidden) {
     closeAboutModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && !shortcutsModal.hidden) {
+    closeShortcutsModal();
     return;
   }
 
