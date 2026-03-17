@@ -17,6 +17,7 @@
   --active-border: #9dbef0;
   --canvas-bg: #ffffff;
   --canvas-grid: #ececec;
+  --canvas-divider-grid: #c4cfdb;
   --overlay: rgba(0, 0, 0, 0.35);
   --link: #0a55b8;
   --preview-border: #3a3a3a;
@@ -41,6 +42,7 @@ body[data-theme='dark'] {
   --active-border: #5577a6;
   --canvas-bg: #232931;
   --canvas-grid: #2f3742;
+  --canvas-divider-grid: #526277;
   --overlay: rgba(5, 8, 12, 0.65);
   --link: #7fb2ff;
   --preview-border: #d0d5dd;
@@ -279,6 +281,8 @@ body {
   position: relative;
   padding: 12px;
   overflow: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
@@ -306,11 +310,37 @@ body {
   border: 1px solid var(--panel-border);
   background-color: var(--canvas-bg);
   background-image:
+    linear-gradient(to right, var(--canvas-divider-grid) 2px, transparent 2px),
+    linear-gradient(to bottom, var(--canvas-divider-grid) 2px, transparent 2px),
+    linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px);
+  background-size:
+    var(--divider-size, 1000px) var(--divider-size, 1000px),
+    var(--divider-size, 1000px) var(--divider-size, 1000px),
+    24px 24px,
+    24px 24px;
+  max-width: none;
+  height: auto;
+}
+
+#mapCanvas.hide-section-dividers {
+  background-image:
     linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px),
     linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px);
   background-size: 24px 24px;
-  max-width: none;
-  height: auto;
+}
+
+#mapCanvas.hide-fine-grid {
+  background-image:
+    linear-gradient(to right, var(--canvas-divider-grid) 2px, transparent 2px),
+    linear-gradient(to bottom, var(--canvas-divider-grid) 2px, transparent 2px);
+  background-size:
+    var(--divider-size, 1000px) var(--divider-size, 1000px),
+    var(--divider-size, 1000px) var(--divider-size, 1000px);
+}
+
+#mapCanvas.hide-section-dividers.hide-fine-grid {
+  background-image: none;
 }
 
 .canvas-wrap.is-pan-ready #mapCanvas {
@@ -426,6 +456,15 @@ body {
   color: var(--text);
   padding: 6px 8px;
   font-size: 13px;
+}
+
+.option-check-row {
+  grid-template-columns: 1fr auto;
+}
+
+.option-check-row input {
+  width: 16px;
+  height: 16px;
 }
 
 .option-warning {

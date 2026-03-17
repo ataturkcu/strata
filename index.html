@@ -139,6 +139,14 @@
             <label for="historyStatesInput">History States</label>
             <input id="historyStatesInput" type="number" min="5" max="200" step="1" value="20" />
           </div>
+          <div class="option-row option-check-row">
+            <label for="showSectionDividersInput">Show Section Dividers</label>
+            <input id="showSectionDividersInput" type="checkbox" checked />
+          </div>
+          <div class="option-row option-check-row">
+            <label for="showFineGridInput">Show Fine Grid</label>
+            <input id="showFineGridInput" type="checkbox" checked />
+          </div>
           <p class="option-warning">Warning: history states depends on your memory so be careful while adjusting this!</p>
         </div>
       </div>
@@ -158,6 +166,10 @@
           <div class="option-row">
             <label for="terrainHeightInput">Height (px)</label>
             <input id="terrainHeightInput" type="number" min="64" max="8192" step="64" value="800" />
+          </div>
+          <div class="option-row">
+            <label for="terrainDividerInput">Section Size (px)</label>
+            <input id="terrainDividerInput" type="number" min="64" max="8192" step="64" value="1000" />
           </div>
           <div class="modal-actions">
             <button type="button" class="modal-close" id="terrainSizeApplyButton">Apply</button>

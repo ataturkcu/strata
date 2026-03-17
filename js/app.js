@@ -16,11 +16,14 @@ const optionsModal = document.getElementById('optionsModal');
 const optionsCloseButton = document.getElementById('optionsCloseButton');
 const themeSelect = document.getElementById('themeSelect');
 const historyStatesInput = document.getElementById('historyStatesInput');
+const showSectionDividersInput = document.getElementById('showSectionDividersInput');
+const showFineGridInput = document.getElementById('showFineGridInput');
 const viewButton = document.getElementById('viewButton');
 const terrainSizeModal = document.getElementById('terrainSizeModal');
 const terrainSizeCloseButton = document.getElementById('terrainSizeCloseButton');
 const terrainWidthInput = document.getElementById('terrainWidthInput');
 const terrainHeightInput = document.getElementById('terrainHeightInput');
+const terrainDividerInput = document.getElementById('terrainDividerInput');
 const terrainSizeApplyButton = document.getElementById('terrainSizeApplyButton');
 const aboutButton = document.getElementById('aboutButton');
 const aboutModal = document.getElementById('aboutModal');
@@ -43,6 +46,10 @@ let panStartY = 0;
 let panStartScrollLeft = 0;
 let panStartScrollTop = 0;
 let zoomLevel = 1;
+let terrainDividerSize = 1000;
+let showSectionDividers = true;
+let showFineGrid = true;
+let activePointerId = null;
 
 const minZoom = 0.25;
 const maxZoom = 4;
@@ -119,8 +126,17 @@ function clampZoom(value) {
 }
 
 function updateCanvasDisplaySize() {
-  canvas.style.width = `${Math.round(canvas.width * zoomLevel)}px`;
-  canvas.style.height = `${Math.round(canvas.height * zoomLevel)}px`;
+  canvas.style.width = `${canvas.width * zoomLevel}px`;
+  canvas.style.height = `${canvas.height * zoomLevel}px`;
+  const dividerDisplaySize = Math.max(8, Math.round(terrainDividerSize * zoomLevel));
+  canvas.style.setProperty('--divider-size', `${dividerDisplaySize}px`);
+}
+
+function updateGridVisibility() {
+  canvas.classList.toggle('hide-section-dividers', !showSectionDividers);
+  canvas.classList.toggle('hide-fine-grid', !showFineGrid);
+  showSectionDividersInput.checked = showSectionDividers;
+  showFineGridInput.checked = showFineGrid;
 }
 
 function updateViewStatus() {
@@ -157,6 +173,17 @@ function setZoom(nextZoom, anchorClientX, anchorClientY) {
 
   canvasWrap.scrollLeft = canvas.offsetLeft + newCanvasX - pointerXInWrap;
   canvasWrap.scrollTop = canvas.offsetTop + newCanvasY - pointerYInWrap;
+}
+
+function releasePointerIfCaptured() {
+  if (activePointerId === null) {
+    return;
+  }
+
+  if (canvas.hasPointerCapture(activePointerId)) {
+    canvas.releasePointerCapture(activePointerId);
+  }
+  activePointerId = null;
 }
 
 function createEmojiCursor(emoji, x = 6, y = 20) {
@@ -310,6 +337,8 @@ function startDraw(event) {
     return;
   }
 
+  activePointerId = event.pointerId;
+  canvas.setPointerCapture(activePointerId);
   isDrawing = true;
   hasPendingStrokeChange = false;
   updateCanvasCursor();
@@ -326,10 +355,13 @@ function endDraw() {
   isDrawing = false;
   hasPendingStrokeChange = false;
   context.beginPath();
+  releasePointerIfCaptured();
   updateCanvasCursor();
 }
 
 function startPan(event) {
+  activePointerId = event.pointerId;
+  canvas.setPointerCapture(activePointerId);
   isPanning = true;
   isDrawing = false;
   panStartX = event.clientX;
@@ -349,6 +381,7 @@ function pan(event) {
 
 function stopPan() {
   isPanning = false;
+  releasePointerIfCaptured();
   updateCanvasCursor();
 }
 
@@ -503,13 +536,30 @@ historyStatesInput.addEventListener('change', () => {
   setHistoryStateCount(parsed);
 });
 
+showSectionDividersInput.addEventListener('change', () => {
+  showSectionDividers = showSectionDividersInput.checked;
+  updateGridVisibility();
+  localStorage.setItem('strata-show-section-dividers', showSectionDividers ? '1' : '0');
+});
+
+showFineGridInput.addEventListener('change', () => {
+  showFineGrid = showFineGridInput.checked;
+  updateGridVisibility();
+  localStorage.setItem('strata-show-fine-grid', showFineGrid ? '1' : '0');
+});
+
 function clampTerrainSize(value) {
+  return Math.min(8192, Math.max(64, value));
+}
+
+function clampTerrainDividerSize(value) {
   return Math.min(8192, Math.max(64, value));
 }
 
 function openTerrainSizeModal() {
   terrainWidthInput.value = String(canvas.width);
   terrainHeightInput.value = String(canvas.height);
+  terrainDividerInput.value = String(terrainDividerSize);
   terrainSizeModal.hidden = false;
 }
 
@@ -520,15 +570,19 @@ function closeTerrainSizeModal() {
 function applyTerrainSize() {
   const widthValue = Number(terrainWidthInput.value);
   const heightValue = Number(terrainHeightInput.value);
+  const dividerValue = Number(terrainDividerInput.value);
 
-  if (Number.isNaN(widthValue) || Number.isNaN(heightValue)) {
+  if (Number.isNaN(widthValue) || Number.isNaN(heightValue) || Number.isNaN(dividerValue)) {
     return;
   }
 
   const width = clampTerrainSize(widthValue);
   const height = clampTerrainSize(heightValue);
+  const divider = clampTerrainDividerSize(dividerValue);
   terrainWidthInput.value = String(width);
   terrainHeightInput.value = String(height);
+  terrainDividerInput.value = String(divider);
+  terrainDividerSize = divider;
 
   canvas.width = width;
   canvas.height = height;
@@ -536,6 +590,7 @@ function applyTerrainSize() {
   updateViewStatus();
   localStorage.setItem('strata-terrain-width', String(width));
   localStorage.setItem('strata-terrain-height', String(height));
+  localStorage.setItem('strata-terrain-divider-size', String(divider));
 
   clearCanvas();
   undoStack.length = 0;
@@ -615,6 +670,21 @@ if (!Number.isNaN(savedTerrainWidth) && !Number.isNaN(savedTerrainHeight)) {
   canvas.height = clampTerrainSize(savedTerrainHeight);
 }
 
+const savedTerrainDividerSize = Number(localStorage.getItem('strata-terrain-divider-size') || '1000');
+if (!Number.isNaN(savedTerrainDividerSize)) {
+  terrainDividerSize = clampTerrainDividerSize(savedTerrainDividerSize);
+}
+
+const savedShowSectionDividers = localStorage.getItem('strata-show-section-dividers');
+if (savedShowSectionDividers !== null) {
+  showSectionDividers = savedShowSectionDividers === '1';
+}
+
+const savedShowFineGrid = localStorage.getItem('strata-show-fine-grid');
+if (savedShowFineGrid !== null) {
+  showFineGrid = savedShowFineGrid === '1';
+}
+
 const savedBrushColor = localStorage.getItem('strata-brush-color');
 if (savedBrushColor) {
   currentColor = savedBrushColor;
@@ -635,6 +705,7 @@ if (!Number.isNaN(savedHistoryStates)) {
 
 clearCanvas();
 updateCanvasDisplaySize();
+updateGridVisibility();
 updateViewStatus();
 pushHistoryState();
 updateBrushAppearance();
