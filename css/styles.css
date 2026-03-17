@@ -241,6 +241,10 @@ body {
   width: 100%;
 }
 
+#cornerRadiusInput {
+  width: 100%;
+}
+
 #brushColor {
   width: 34px;
   height: 28px;
@@ -256,6 +260,10 @@ body {
 
 #brushOpacityValue {
   min-width: 44px;
+}
+
+#cornerRadiusValue {
+  min-width: 28px;
 }
 
 .color-swatches {

@@ -9,8 +9,11 @@ const toolSizeValue = document.getElementById('toolSizeValue');
 const brushColorInput = document.getElementById('brushColor');
 const brushOpacityInput = document.getElementById('brushOpacity');
 const brushOpacityValue = document.getElementById('brushOpacityValue');
+const cornerRadiusInput = document.getElementById('cornerRadiusInput');
+const cornerRadiusValue = document.getElementById('cornerRadiusValue');
 const swatchButtons = document.querySelectorAll('.swatch-btn');
 const colorControls = document.getElementById('colorControls');
+const rectangleControls = document.getElementById('rectangleControls');
 const optionsButton = document.getElementById('optionsButton');
 const optionsModal = document.getElementById('optionsModal');
 const optionsCloseButton = document.getElementById('optionsCloseButton');
@@ -41,6 +44,7 @@ let currentTool = 'brush';
 let currentSize = Number(toolSize.value);
 let currentColor = brushColorInput.value;
 let currentOpacity = Number(brushOpacityInput.value) / 100;
+let currentCornerRadius = Number(cornerRadiusInput.value);
 let hasPendingStrokeChange = false;
 let isShiftPressed = false;
 let isPanning = false;
@@ -53,6 +57,9 @@ let terrainDividerSize = 1000;
 let showSectionDividers = true;
 let showFineGrid = true;
 let activePointerId = null;
+let rectangleStartX = 0;
+let rectangleStartY = 0;
+let rectangleSnapshot = null;
 
 const minZoom = 0.25;
 const maxZoom = 4;
@@ -263,6 +270,27 @@ function updateColorControlsVisibility() {
   colorControls.classList.add('is-hidden');
 }
 
+function updateRectangleControlsVisibility() {
+  rectangleControls.classList.toggle('is-hidden', currentTool !== 'rectangle');
+}
+
+function drawRoundedRect(x, y, width, height, radius) {
+  const maxRadius = Math.min(width / 2, height / 2);
+  const r = Math.max(0, Math.min(radius, maxRadius));
+
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.lineTo(x + width - r, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + r);
+  context.lineTo(x + width, y + height - r);
+  context.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  context.lineTo(x + r, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - r);
+  context.lineTo(x, y + r);
+  context.quadraticCurveTo(x, y, x + r, y);
+  context.closePath();
+}
+
 function getToolStrokeSize() {
   if (currentTool === 'line') {
     return Math.max(1, currentSize / 2);
@@ -314,6 +342,7 @@ toolButtons.forEach((button) => {
     setActive(toolButtons, button, 'is-active');
     activeToolLabel.textContent = `Active Tool: ${button.textContent}`;
     updateColorControlsVisibility();
+    updateRectangleControlsVisibility();
     updateCanvasCursor();
   });
 });
@@ -346,6 +375,14 @@ function startDraw(event) {
   hasPendingStrokeChange = false;
   updateCanvasCursor();
   const { x, y } = getCanvasPosition(event);
+
+  if (currentTool === 'rectangle') {
+    rectangleStartX = x;
+    rectangleStartY = y;
+    rectangleSnapshot = getCanvasSnapshot();
+    return;
+  }
+
   context.beginPath();
   context.moveTo(x, y);
   draw(event);
@@ -357,6 +394,7 @@ function endDraw() {
   }
   isDrawing = false;
   hasPendingStrokeChange = false;
+  rectangleSnapshot = null;
   context.beginPath();
   releasePointerIfCaptured();
   updateCanvasCursor();
@@ -402,6 +440,32 @@ function draw(event) {
     return;
   }
 
+  if (currentTool === 'rectangle') {
+    if (!rectangleSnapshot) {
+      return;
+    }
+
+    restoreCanvasSnapshot(rectangleSnapshot);
+    context.globalCompositeOperation = 'source-over';
+    context.globalAlpha = currentOpacity;
+    context.strokeStyle = currentColor;
+    context.lineWidth = Math.max(1, currentSize);
+
+    const left = Math.min(rectangleStartX, x);
+    const top = Math.min(rectangleStartY, y);
+    const width = Math.abs(x - rectangleStartX);
+    const height = Math.abs(y - rectangleStartY);
+
+    if (currentCornerRadius > 0) {
+      drawRoundedRect(left, top, width, height, currentCornerRadius);
+      context.stroke();
+    } else {
+      context.strokeRect(left, top, width, height);
+    }
+    hasPendingStrokeChange = width > 0 || height > 0;
+    return;
+  }
+
   if (currentTool === 'eraser') {
     hasPendingStrokeChange = true;
     context.save();
@@ -443,6 +507,12 @@ brushOpacityInput.addEventListener('input', () => {
   currentOpacity = Number(brushOpacityInput.value) / 100;
   updateBrushAppearance();
   localStorage.setItem('strata-brush-opacity', String(Math.round(currentOpacity * 100)));
+});
+
+cornerRadiusInput.addEventListener('input', () => {
+  currentCornerRadius = Number(cornerRadiusInput.value);
+  cornerRadiusValue.textContent = String(currentCornerRadius);
+  localStorage.setItem('strata-corner-radius', String(currentCornerRadius));
 });
 
 swatchButtons.forEach((button) => {
@@ -721,6 +791,12 @@ if (!Number.isNaN(savedBrushOpacity)) {
   brushOpacityInput.value = String(Math.round(currentOpacity * 100));
 }
 
+const savedCornerRadius = Number(localStorage.getItem('strata-corner-radius') || '0');
+if (!Number.isNaN(savedCornerRadius)) {
+  currentCornerRadius = Math.max(0, Math.min(256, savedCornerRadius));
+  cornerRadiusInput.value = String(currentCornerRadius);
+}
+
 const savedHistoryStates = Number(localStorage.getItem('strata-history-states') || '20');
 if (!Number.isNaN(savedHistoryStates)) {
   setHistoryStateCount(savedHistoryStates);
@@ -735,5 +811,7 @@ updateViewStatus();
 pushHistoryState();
 updateBrushAppearance();
 updateColorControlsVisibility();
+updateRectangleControlsVisibility();
+cornerRadiusValue.textContent = String(currentCornerRadius);
 updateCanvasCursor();
 openTerrainSizeModal();
