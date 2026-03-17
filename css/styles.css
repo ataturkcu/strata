@@ -249,7 +249,9 @@ body {
   width: 100%;
 }
 
-#lineStyleSelect {
+#lineStyleSelect,
+#shapeTypeSelect,
+#shapeModeSelect {
   width: 100%;
   border: 1px solid var(--panel-border);
   background: var(--panel-elev);

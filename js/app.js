@@ -14,10 +14,13 @@ const cornerRadiusValue = document.getElementById('cornerRadiusValue');
 const lineStyleSelect = document.getElementById('lineStyleSelect');
 const lineSpacingInput = document.getElementById('lineSpacingInput');
 const lineSpacingValue = document.getElementById('lineSpacingValue');
+const shapeTypeSelect = document.getElementById('shapeTypeSelect');
+const shapeModeSelect = document.getElementById('shapeModeSelect');
 const swatchButtons = document.querySelectorAll('.swatch-btn');
 const colorControls = document.getElementById('colorControls');
 const rectangleControls = document.getElementById('rectangleControls');
 const lineControls = document.getElementById('lineControls');
+const shapeControls = document.getElementById('shapeControls');
 const optionsButton = document.getElementById('optionsButton');
 const optionsModal = document.getElementById('optionsModal');
 const optionsCloseButton = document.getElementById('optionsCloseButton');
@@ -51,6 +54,8 @@ let currentOpacity = Number(brushOpacityInput.value) / 100;
 let currentCornerRadius = Number(cornerRadiusInput.value);
 let currentLineStyle = lineStyleSelect.value;
 let currentLineSpacing = Number(lineSpacingInput.value);
+let currentShapeType = shapeTypeSelect.value;
+let currentShapeMode = shapeModeSelect.value;
 let hasPendingStrokeChange = false;
 let isShiftPressed = false;
 let isPanning = false;
@@ -69,6 +74,9 @@ let rectangleSnapshot = null;
 let lineStartX = 0;
 let lineStartY = 0;
 let lineSnapshot = null;
+let shapeStartX = 0;
+let shapeStartY = 0;
+let shapeSnapshot = null;
 
 const minZoom = 0.25;
 const maxZoom = 4;
@@ -410,6 +418,42 @@ function updateLineControlsVisibility() {
   lineControls.classList.toggle('is-hidden', currentTool !== 'line');
 }
 
+function updateShapeControlsVisibility() {
+  shapeControls.classList.toggle('is-hidden', currentTool !== 'shape');
+}
+
+function drawRegularPolygon(cx, cy, radius, sides, rotation) {
+  context.beginPath();
+  for (let i = 0; i < sides; i += 1) {
+    const angle = rotation + (i * Math.PI * 2) / sides;
+    const px = cx + Math.cos(angle) * radius;
+    const py = cy + Math.sin(angle) * radius;
+    if (i === 0) {
+      context.moveTo(px, py);
+    } else {
+      context.lineTo(px, py);
+    }
+  }
+  context.closePath();
+}
+
+function drawStar(cx, cy, outerRadius, innerRadius, points, rotation) {
+  context.beginPath();
+  const step = Math.PI / points;
+  for (let i = 0; i < points * 2; i += 1) {
+    const radius = i % 2 === 0 ? outerRadius : innerRadius;
+    const angle = rotation + i * step;
+    const px = cx + Math.cos(angle) * radius;
+    const py = cy + Math.sin(angle) * radius;
+    if (i === 0) {
+      context.moveTo(px, py);
+    } else {
+      context.lineTo(px, py);
+    }
+  }
+  context.closePath();
+}
+
 function getLineDashPattern(style, spacing) {
   const gap = Math.max(2, spacing);
   if (style === 'dashed') {
@@ -435,6 +479,84 @@ function drawRoundedRect(x, y, width, height, radius) {
   context.quadraticCurveTo(x, y + height, x, y + height - r);
   context.lineTo(x, y + r);
   context.quadraticCurveTo(x, y, x + r, y);
+  context.closePath();
+}
+
+function buildShapePath(type, left, top, width, height) {
+  const cx = left + width / 2;
+  const cy = top + height / 2;
+
+  context.beginPath();
+
+  if (type === 'square') {
+    const side = Math.min(width, height);
+    const x = cx - side / 2;
+    const y = cy - side / 2;
+    context.rect(x, y, side, side);
+    context.closePath();
+    return;
+  }
+
+  if (type === 'triangle') {
+    context.moveTo(cx, top);
+    context.lineTo(left + width, top + height);
+    context.lineTo(left, top + height);
+    context.closePath();
+    return;
+  }
+
+  if (type === 'pentagon') {
+    drawRegularPolygon(cx, cy, Math.min(width, height) / 2, 5, -Math.PI / 2);
+    return;
+  }
+
+  if (type === 'hexagon') {
+    drawRegularPolygon(cx, cy, Math.min(width, height) / 2, 6, Math.PI / 6);
+    return;
+  }
+
+  if (type === 'star') {
+    const outerRadius = Math.min(width, height) / 2;
+    const innerRadius = outerRadius * 0.45;
+    drawStar(cx, cy, outerRadius, innerRadius, 5, -Math.PI / 2);
+    return;
+  }
+
+  if (type === 'arrow') {
+    const right = left + width;
+    const bottom = top + height;
+    const headW = width * 0.35;
+    const bodyW = width - headW;
+    const bodyHalfH = height * 0.22;
+
+    context.moveTo(left, cy - bodyHalfH);
+    context.lineTo(left + bodyW, cy - bodyHalfH);
+    context.lineTo(left + bodyW, top);
+    context.lineTo(right, cy);
+    context.lineTo(left + bodyW, bottom);
+    context.lineTo(left + bodyW, cy + bodyHalfH);
+    context.lineTo(left, cy + bodyHalfH);
+    context.closePath();
+    return;
+  }
+
+  if (type === 'diamond') {
+    context.moveTo(cx, top);
+    context.lineTo(left + width, cy);
+    context.lineTo(cx, top + height);
+    context.lineTo(left, cy);
+    context.closePath();
+    return;
+  }
+
+  if (type === 'ellipse') {
+    context.ellipse(cx, cy, width / 2, height / 2, 0, 0, Math.PI * 2);
+    context.closePath();
+    return;
+  }
+
+  const radius = Math.min(width, height) / 2;
+  context.arc(cx, cy, radius, 0, Math.PI * 2);
   context.closePath();
 }
 
@@ -488,6 +610,7 @@ toolButtons.forEach((button) => {
     updateColorControlsVisibility();
     updateRectangleControlsVisibility();
     updateLineControlsVisibility();
+    updateShapeControlsVisibility();
     updateCanvasCursor();
   });
 });
@@ -535,6 +658,13 @@ function startDraw(event) {
     return;
   }
 
+  if (currentTool === 'shape') {
+    shapeStartX = x;
+    shapeStartY = y;
+    shapeSnapshot = getCanvasSnapshot();
+    return;
+  }
+
   if (currentTool === 'fill') {
     const pixelX = Math.floor(x);
     const pixelY = Math.floor(y);
@@ -560,6 +690,7 @@ function endDraw() {
   hasPendingStrokeChange = false;
   rectangleSnapshot = null;
   lineSnapshot = null;
+  shapeSnapshot = null;
   context.beginPath();
   context.setLineDash([]);
   releasePointerIfCaptured();
@@ -656,6 +787,40 @@ function draw(event) {
     return;
   }
 
+  if (currentTool === 'shape') {
+    if (!shapeSnapshot) {
+      return;
+    }
+
+    restoreCanvasSnapshot(shapeSnapshot);
+    context.globalCompositeOperation = 'source-over';
+    context.globalAlpha = currentOpacity;
+    context.strokeStyle = currentColor;
+    context.fillStyle = currentColor;
+    context.lineWidth = Math.max(1, currentSize);
+    context.lineJoin = 'round';
+
+    const left = Math.min(shapeStartX, x);
+    const top = Math.min(shapeStartY, y);
+    const width = Math.abs(x - shapeStartX);
+    const height = Math.abs(y - shapeStartY);
+
+    if (width <= 0 || height <= 0) {
+      hasPendingStrokeChange = false;
+      return;
+    }
+
+    buildShapePath(currentShapeType, left, top, width, height);
+    if (currentShapeMode === 'fill') {
+      context.fill();
+    } else {
+      context.stroke();
+    }
+
+    hasPendingStrokeChange = true;
+    return;
+  }
+
   if (currentTool === 'eraser') {
     hasPendingStrokeChange = true;
     context.save();
@@ -715,6 +880,16 @@ lineSpacingInput.addEventListener('input', () => {
   currentLineSpacing = Number(lineSpacingInput.value);
   lineSpacingValue.textContent = String(currentLineSpacing);
   localStorage.setItem('strata-line-spacing', String(currentLineSpacing));
+});
+
+shapeTypeSelect.addEventListener('change', () => {
+  currentShapeType = shapeTypeSelect.value;
+  localStorage.setItem('strata-shape-type', currentShapeType);
+});
+
+shapeModeSelect.addEventListener('change', () => {
+  currentShapeMode = shapeModeSelect.value;
+  localStorage.setItem('strata-shape-mode', currentShapeMode);
 });
 
 swatchButtons.forEach((button) => {
@@ -1011,6 +1186,28 @@ if (!Number.isNaN(savedLineSpacing)) {
   lineSpacingInput.value = String(currentLineSpacing);
 }
 
+const savedShapeType = localStorage.getItem('strata-shape-type');
+if (
+  savedShapeType === 'circle' ||
+  savedShapeType === 'ellipse' ||
+  savedShapeType === 'triangle' ||
+  savedShapeType === 'diamond' ||
+  savedShapeType === 'square' ||
+  savedShapeType === 'pentagon' ||
+  savedShapeType === 'hexagon' ||
+  savedShapeType === 'star' ||
+  savedShapeType === 'arrow'
+) {
+  currentShapeType = savedShapeType;
+  shapeTypeSelect.value = savedShapeType;
+}
+
+const savedShapeMode = localStorage.getItem('strata-shape-mode');
+if (savedShapeMode === 'stroke' || savedShapeMode === 'fill') {
+  currentShapeMode = savedShapeMode;
+  shapeModeSelect.value = savedShapeMode;
+}
+
 const savedHistoryStates = Number(localStorage.getItem('strata-history-states') || '20');
 if (!Number.isNaN(savedHistoryStates)) {
   setHistoryStateCount(savedHistoryStates);
@@ -1027,6 +1224,7 @@ updateBrushAppearance();
 updateColorControlsVisibility();
 updateRectangleControlsVisibility();
 updateLineControlsVisibility();
+updateShapeControlsVisibility();
 cornerRadiusValue.textContent = String(currentCornerRadius);
 lineSpacingValue.textContent = String(currentLineSpacing);
 updateCanvasCursor();
