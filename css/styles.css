@@ -245,6 +245,19 @@ body {
   width: 100%;
 }
 
+#lineSpacingInput {
+  width: 100%;
+}
+
+#lineStyleSelect {
+  width: 100%;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-elev);
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
 #brushColor {
   width: 34px;
   height: 28px;
@@ -263,6 +276,10 @@ body {
 }
 
 #cornerRadiusValue {
+  min-width: 28px;
+}
+
+#lineSpacingValue {
   min-width: 28px;
 }
 

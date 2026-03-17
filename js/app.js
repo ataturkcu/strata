@@ -11,9 +11,13 @@ const brushOpacityInput = document.getElementById('brushOpacity');
 const brushOpacityValue = document.getElementById('brushOpacityValue');
 const cornerRadiusInput = document.getElementById('cornerRadiusInput');
 const cornerRadiusValue = document.getElementById('cornerRadiusValue');
+const lineStyleSelect = document.getElementById('lineStyleSelect');
+const lineSpacingInput = document.getElementById('lineSpacingInput');
+const lineSpacingValue = document.getElementById('lineSpacingValue');
 const swatchButtons = document.querySelectorAll('.swatch-btn');
 const colorControls = document.getElementById('colorControls');
 const rectangleControls = document.getElementById('rectangleControls');
+const lineControls = document.getElementById('lineControls');
 const optionsButton = document.getElementById('optionsButton');
 const optionsModal = document.getElementById('optionsModal');
 const optionsCloseButton = document.getElementById('optionsCloseButton');
@@ -45,6 +49,8 @@ let currentSize = Number(toolSize.value);
 let currentColor = brushColorInput.value;
 let currentOpacity = Number(brushOpacityInput.value) / 100;
 let currentCornerRadius = Number(cornerRadiusInput.value);
+let currentLineStyle = lineStyleSelect.value;
+let currentLineSpacing = Number(lineSpacingInput.value);
 let hasPendingStrokeChange = false;
 let isShiftPressed = false;
 let isPanning = false;
@@ -60,6 +66,9 @@ let activePointerId = null;
 let rectangleStartX = 0;
 let rectangleStartY = 0;
 let rectangleSnapshot = null;
+let lineStartX = 0;
+let lineStartY = 0;
+let lineSnapshot = null;
 
 const minZoom = 0.25;
 const maxZoom = 4;
@@ -274,6 +283,21 @@ function updateRectangleControlsVisibility() {
   rectangleControls.classList.toggle('is-hidden', currentTool !== 'rectangle');
 }
 
+function updateLineControlsVisibility() {
+  lineControls.classList.toggle('is-hidden', currentTool !== 'line');
+}
+
+function getLineDashPattern(style, spacing) {
+  const gap = Math.max(2, spacing);
+  if (style === 'dashed') {
+    return [Math.max(8, gap * 1.6), gap];
+  }
+  if (style === 'dotted') {
+    return [2, gap];
+  }
+  return [];
+}
+
 function drawRoundedRect(x, y, width, height, radius) {
   const maxRadius = Math.min(width / 2, height / 2);
   const r = Math.max(0, Math.min(radius, maxRadius));
@@ -292,9 +316,6 @@ function drawRoundedRect(x, y, width, height, radius) {
 }
 
 function getToolStrokeSize() {
-  if (currentTool === 'line') {
-    return Math.max(1, currentSize / 2);
-  }
   return currentSize;
 }
 
@@ -343,6 +364,7 @@ toolButtons.forEach((button) => {
     activeToolLabel.textContent = `Active Tool: ${button.textContent}`;
     updateColorControlsVisibility();
     updateRectangleControlsVisibility();
+    updateLineControlsVisibility();
     updateCanvasCursor();
   });
 });
@@ -383,6 +405,13 @@ function startDraw(event) {
     return;
   }
 
+  if (currentTool === 'line') {
+    lineStartX = x;
+    lineStartY = y;
+    lineSnapshot = getCanvasSnapshot();
+    return;
+  }
+
   context.beginPath();
   context.moveTo(x, y);
   draw(event);
@@ -395,7 +424,9 @@ function endDraw() {
   isDrawing = false;
   hasPendingStrokeChange = false;
   rectangleSnapshot = null;
+  lineSnapshot = null;
   context.beginPath();
+  context.setLineDash([]);
   releasePointerIfCaptured();
   updateCanvasCursor();
 }
@@ -466,6 +497,30 @@ function draw(event) {
     return;
   }
 
+  if (currentTool === 'line') {
+    if (!lineSnapshot) {
+      return;
+    }
+
+    restoreCanvasSnapshot(lineSnapshot);
+    context.globalCompositeOperation = 'source-over';
+    context.globalAlpha = currentOpacity;
+    context.strokeStyle = currentColor;
+    context.lineWidth = Math.max(1, currentSize);
+    context.lineJoin = 'round';
+    context.lineCap = currentLineStyle === 'dotted' ? 'round' : 'butt';
+    context.setLineDash(getLineDashPattern(currentLineStyle, currentLineSpacing));
+
+    context.beginPath();
+    context.moveTo(lineStartX, lineStartY);
+    context.lineTo(x, y);
+    context.stroke();
+    context.setLineDash([]);
+
+    hasPendingStrokeChange = x !== lineStartX || y !== lineStartY;
+    return;
+  }
+
   if (currentTool === 'eraser') {
     hasPendingStrokeChange = true;
     context.save();
@@ -482,6 +537,7 @@ function draw(event) {
   context.globalAlpha = currentOpacity;
   context.lineCap = 'round';
   context.lineJoin = 'round';
+  context.setLineDash([]);
   context.strokeStyle = currentColor;
   context.lineWidth = getToolStrokeSize();
   hasPendingStrokeChange = true;
@@ -513,6 +569,17 @@ cornerRadiusInput.addEventListener('input', () => {
   currentCornerRadius = Number(cornerRadiusInput.value);
   cornerRadiusValue.textContent = String(currentCornerRadius);
   localStorage.setItem('strata-corner-radius', String(currentCornerRadius));
+});
+
+lineStyleSelect.addEventListener('change', () => {
+  currentLineStyle = lineStyleSelect.value;
+  localStorage.setItem('strata-line-style', currentLineStyle);
+});
+
+lineSpacingInput.addEventListener('input', () => {
+  currentLineSpacing = Number(lineSpacingInput.value);
+  lineSpacingValue.textContent = String(currentLineSpacing);
+  localStorage.setItem('strata-line-spacing', String(currentLineSpacing));
 });
 
 swatchButtons.forEach((button) => {
@@ -797,6 +864,18 @@ if (!Number.isNaN(savedCornerRadius)) {
   cornerRadiusInput.value = String(currentCornerRadius);
 }
 
+const savedLineStyle = localStorage.getItem('strata-line-style');
+if (savedLineStyle === 'solid' || savedLineStyle === 'dashed' || savedLineStyle === 'dotted') {
+  currentLineStyle = savedLineStyle;
+  lineStyleSelect.value = savedLineStyle;
+}
+
+const savedLineSpacing = Number(localStorage.getItem('strata-line-spacing') || '10');
+if (!Number.isNaN(savedLineSpacing)) {
+  currentLineSpacing = Math.max(2, Math.min(64, savedLineSpacing));
+  lineSpacingInput.value = String(currentLineSpacing);
+}
+
 const savedHistoryStates = Number(localStorage.getItem('strata-history-states') || '20');
 if (!Number.isNaN(savedHistoryStates)) {
   setHistoryStateCount(savedHistoryStates);
@@ -812,6 +891,8 @@ pushHistoryState();
 updateBrushAppearance();
 updateColorControlsVisibility();
 updateRectangleControlsVisibility();
+updateLineControlsVisibility();
 cornerRadiusValue.textContent = String(currentCornerRadius);
+lineSpacingValue.textContent = String(currentLineSpacing);
 updateCanvasCursor();
 openTerrainSizeModal();
