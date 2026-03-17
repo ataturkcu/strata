@@ -2,6 +2,8 @@ const toolButtons = document.querySelectorAll('.tool-btn');
 const layerButtons = document.querySelectorAll('.layer-btn');
 const activeToolLabel = document.getElementById('activeToolLabel');
 const mouseCoords = document.getElementById('mouseCoords');
+const zoomStatus = document.getElementById('zoomStatus');
+const terrainSizeStatus = document.getElementById('terrainSizeStatus');
 const toolSize = document.getElementById('toolSize');
 const toolSizeValue = document.getElementById('toolSizeValue');
 const brushColorInput = document.getElementById('brushColor');
@@ -14,9 +16,16 @@ const optionsModal = document.getElementById('optionsModal');
 const optionsCloseButton = document.getElementById('optionsCloseButton');
 const themeSelect = document.getElementById('themeSelect');
 const historyStatesInput = document.getElementById('historyStatesInput');
+const viewButton = document.getElementById('viewButton');
+const terrainSizeModal = document.getElementById('terrainSizeModal');
+const terrainSizeCloseButton = document.getElementById('terrainSizeCloseButton');
+const terrainWidthInput = document.getElementById('terrainWidthInput');
+const terrainHeightInput = document.getElementById('terrainHeightInput');
+const terrainSizeApplyButton = document.getElementById('terrainSizeApplyButton');
 const aboutButton = document.getElementById('aboutButton');
 const aboutModal = document.getElementById('aboutModal');
 const aboutCloseButton = document.getElementById('aboutCloseButton');
+const canvasWrap = document.getElementById('canvasWrap');
 const canvas = document.getElementById('mapCanvas');
 const brushPreview = document.getElementById('brushPreview');
 const context = canvas.getContext('2d');
@@ -27,6 +36,17 @@ let currentSize = Number(toolSize.value);
 let currentColor = brushColorInput.value;
 let currentOpacity = Number(brushOpacityInput.value) / 100;
 let hasPendingStrokeChange = false;
+let isShiftPressed = false;
+let isPanning = false;
+let panStartX = 0;
+let panStartY = 0;
+let panStartScrollLeft = 0;
+let panStartScrollTop = 0;
+let zoomLevel = 1;
+
+const minZoom = 0.25;
+const maxZoom = 4;
+const zoomStepFactor = 1.1;
 
 let maxHistoryStates = 20;
 const undoStack = [];
@@ -94,6 +114,51 @@ function setHistoryStateCount(value) {
   localStorage.setItem('strata-history-states', String(maxHistoryStates));
 }
 
+function clampZoom(value) {
+  return Math.min(maxZoom, Math.max(minZoom, value));
+}
+
+function updateCanvasDisplaySize() {
+  canvas.style.width = `${Math.round(canvas.width * zoomLevel)}px`;
+  canvas.style.height = `${Math.round(canvas.height * zoomLevel)}px`;
+}
+
+function updateViewStatus() {
+  zoomStatus.textContent = `Zoom: ${Math.round(zoomLevel * 100)}%`;
+  terrainSizeStatus.textContent = `Terrain: ${canvas.width} x ${canvas.height}`;
+}
+
+function setZoom(nextZoom, anchorClientX, anchorClientY) {
+  const clamped = clampZoom(nextZoom);
+  if (clamped === zoomLevel) {
+    return;
+  }
+
+  const wrapRect = canvasWrap.getBoundingClientRect();
+  const rect = canvas.getBoundingClientRect();
+  const safeRectWidth = rect.width || 1;
+  const safeRectHeight = rect.height || 1;
+
+  const pointerX = typeof anchorClientX === 'number' ? anchorClientX : wrapRect.left + wrapRect.width / 2;
+  const pointerY = typeof anchorClientY === 'number' ? anchorClientY : wrapRect.top + wrapRect.height / 2;
+
+  const canvasX = ((pointerX - rect.left) / safeRectWidth) * canvas.width;
+  const canvasY = ((pointerY - rect.top) / safeRectHeight) * canvas.height;
+  const pointerXInWrap = pointerX - wrapRect.left;
+  const pointerYInWrap = pointerY - wrapRect.top;
+
+  zoomLevel = clamped;
+  updateCanvasDisplaySize();
+  updateViewStatus();
+
+  const newRect = canvas.getBoundingClientRect();
+  const newCanvasX = (canvasX / canvas.width) * newRect.width;
+  const newCanvasY = (canvasY / canvas.height) * newRect.height;
+
+  canvasWrap.scrollLeft = canvas.offsetLeft + newCanvasX - pointerXInWrap;
+  canvasWrap.scrollTop = canvas.offsetTop + newCanvasY - pointerYInWrap;
+}
+
 function createEmojiCursor(emoji, x = 6, y = 20) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><text x="2" y="24" font-size="22">${emoji}</text></svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${x} ${y}, auto`;
@@ -134,6 +199,21 @@ function updateBrushAppearance() {
 }
 
 function updateCanvasCursor() {
+  if (isPanning) {
+    canvasWrap.classList.add('is-panning');
+    canvasWrap.classList.remove('is-pan-ready');
+    return;
+  }
+
+  if (isShiftPressed) {
+    canvasWrap.classList.add('is-pan-ready');
+    canvasWrap.classList.remove('is-panning');
+    return;
+  }
+
+  canvasWrap.classList.remove('is-pan-ready');
+  canvasWrap.classList.remove('is-panning');
+
   if (isEraserTool(currentTool)) {
     canvas.style.cursor = eraserCursor;
     return;
@@ -169,6 +249,11 @@ function hideBrushPreview() {
 }
 
 function updateBrushPreview(event) {
+  if (isShiftPressed || isPanning) {
+    hideBrushPreview();
+    return;
+  }
+
   if (!shouldShowSizePreview()) {
     hideBrushPreview();
     return;
@@ -221,6 +306,10 @@ function getCanvasPosition(event) {
 }
 
 function startDraw(event) {
+  if (isShiftPressed || isPanning) {
+    return;
+  }
+
   isDrawing = true;
   hasPendingStrokeChange = false;
   updateCanvasCursor();
@@ -240,7 +329,35 @@ function endDraw() {
   updateCanvasCursor();
 }
 
+function startPan(event) {
+  isPanning = true;
+  isDrawing = false;
+  panStartX = event.clientX;
+  panStartY = event.clientY;
+  panStartScrollLeft = canvasWrap.scrollLeft;
+  panStartScrollTop = canvasWrap.scrollTop;
+  hideBrushPreview();
+  updateCanvasCursor();
+}
+
+function pan(event) {
+  const dx = event.clientX - panStartX;
+  const dy = event.clientY - panStartY;
+  canvasWrap.scrollLeft = panStartScrollLeft - dx;
+  canvasWrap.scrollTop = panStartScrollTop - dy;
+}
+
+function stopPan() {
+  isPanning = false;
+  updateCanvasCursor();
+}
+
 function draw(event) {
+  if (isPanning) {
+    pan(event);
+    return;
+  }
+
   const { x, y } = getCanvasPosition(event);
   mouseCoords.textContent = `Mouse: x ${Math.round(x)}, y ${Math.round(y)}`;
   updateBrushPreview(event);
@@ -300,18 +417,43 @@ swatchButtons.forEach((button) => {
   });
 });
 
-canvas.addEventListener('pointerdown', startDraw);
+canvas.addEventListener('pointerdown', (event) => {
+  if (event.button === 0 && event.shiftKey) {
+    startPan(event);
+    return;
+  }
+  startDraw(event);
+});
 canvas.addEventListener('pointermove', draw);
-window.addEventListener('pointerup', endDraw);
+window.addEventListener('pointerup', () => {
+  if (isPanning) {
+    stopPan();
+    return;
+  }
+  endDraw();
+});
 canvas.addEventListener('pointerleave', endDraw);
 canvas.addEventListener('pointerleave', () => {
   mouseCoords.textContent = 'Mouse: x -, y -';
   hideBrushPreview();
+  if (isPanning) {
+    stopPan();
+  }
 });
 canvas.addEventListener('pointerenter', (event) => {
   updateCanvasCursor();
   updateBrushPreview(event);
 });
+
+canvasWrap.addEventListener('wheel', (event) => {
+  if (!event.ctrlKey && !event.metaKey) {
+    return;
+  }
+
+  event.preventDefault();
+  const zoomFactor = event.deltaY < 0 ? zoomStepFactor : 1 / zoomStepFactor;
+  setZoom(zoomLevel * zoomFactor, event.clientX, event.clientY);
+}, { passive: false });
 
 function openAboutModal() {
   aboutModal.hidden = false;
@@ -361,7 +503,63 @@ historyStatesInput.addEventListener('change', () => {
   setHistoryStateCount(parsed);
 });
 
+function clampTerrainSize(value) {
+  return Math.min(8192, Math.max(64, value));
+}
+
+function openTerrainSizeModal() {
+  terrainWidthInput.value = String(canvas.width);
+  terrainHeightInput.value = String(canvas.height);
+  terrainSizeModal.hidden = false;
+}
+
+function closeTerrainSizeModal() {
+  terrainSizeModal.hidden = true;
+}
+
+function applyTerrainSize() {
+  const widthValue = Number(terrainWidthInput.value);
+  const heightValue = Number(terrainHeightInput.value);
+
+  if (Number.isNaN(widthValue) || Number.isNaN(heightValue)) {
+    return;
+  }
+
+  const width = clampTerrainSize(widthValue);
+  const height = clampTerrainSize(heightValue);
+  terrainWidthInput.value = String(width);
+  terrainHeightInput.value = String(height);
+
+  canvas.width = width;
+  canvas.height = height;
+  updateCanvasDisplaySize();
+  updateViewStatus();
+  localStorage.setItem('strata-terrain-width', String(width));
+  localStorage.setItem('strata-terrain-height', String(height));
+
+  clearCanvas();
+  undoStack.length = 0;
+  redoStack.length = 0;
+  pushHistoryState();
+  closeTerrainSizeModal();
+}
+
+viewButton.addEventListener('click', openTerrainSizeModal);
+terrainSizeCloseButton.addEventListener('click', closeTerrainSizeModal);
+terrainSizeApplyButton.addEventListener('click', applyTerrainSize);
+
+terrainSizeModal.addEventListener('click', (event) => {
+  if (event.target === terrainSizeModal) {
+    closeTerrainSizeModal();
+  }
+});
+
 window.addEventListener('keydown', (event) => {
+  if (event.key === 'Shift') {
+    isShiftPressed = true;
+    updateCanvasCursor();
+  }
+
   if (event.key === 'Escape' && !aboutModal.hidden) {
     closeAboutModal();
     return;
@@ -369,6 +567,11 @@ window.addEventListener('keydown', (event) => {
 
   if (event.key === 'Escape' && !optionsModal.hidden) {
     closeOptionsModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && !terrainSizeModal.hidden) {
+    closeTerrainSizeModal();
     return;
   }
 
@@ -388,12 +591,29 @@ window.addEventListener('keydown', (event) => {
   }
 });
 
+window.addEventListener('keyup', (event) => {
+  if (event.key === 'Shift') {
+    isShiftPressed = false;
+    if (isPanning) {
+      stopPan();
+    }
+    updateCanvasCursor();
+  }
+});
+
 function clearCanvas() {
   context.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 const savedTheme = localStorage.getItem('strata-theme') || 'dark';
 applyTheme(savedTheme);
+
+const savedTerrainWidth = Number(localStorage.getItem('strata-terrain-width') || String(canvas.width));
+const savedTerrainHeight = Number(localStorage.getItem('strata-terrain-height') || String(canvas.height));
+if (!Number.isNaN(savedTerrainWidth) && !Number.isNaN(savedTerrainHeight)) {
+  canvas.width = clampTerrainSize(savedTerrainWidth);
+  canvas.height = clampTerrainSize(savedTerrainHeight);
+}
 
 const savedBrushColor = localStorage.getItem('strata-brush-color');
 if (savedBrushColor) {
@@ -414,7 +634,10 @@ if (!Number.isNaN(savedHistoryStates)) {
 }
 
 clearCanvas();
+updateCanvasDisplaySize();
+updateViewStatus();
 pushHistoryState();
 updateBrushAppearance();
 updateColorControlsVisibility();
 updateCanvasCursor();
+openTerrainSizeModal();

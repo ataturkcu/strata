@@ -12,7 +12,7 @@
       <nav class="menu-items" aria-label="Main menu">
         <button type="button" class="menu-item">File</button>
         <button type="button" class="menu-item">Edit</button>
-        <button type="button" class="menu-item">View</button>
+        <button type="button" class="menu-item" id="viewButton">View</button>
         <button type="button" class="menu-item">Donate</button>
         <button type="button" class="menu-item" id="optionsButton">Options</button>
         <button type="button" class="menu-item" id="aboutButton">About</button>
@@ -42,6 +42,8 @@
             <button type="button" class="tool-btn" data-tool="biome-paint">Biome Paint</button>
           </div>
           <div class="panel-meta" id="mouseCoords">Mouse: x -, y -</div>
+          <div class="panel-meta" id="zoomStatus">Zoom: 100%</div>
+          <div class="panel-meta" id="terrainSizeStatus">Terrain: 1200 x 800</div>
         </section>
       </aside>
 
@@ -51,7 +53,7 @@
             <span id="activeToolLabel">Active Tool: Brush</span>
           </div>
         </div>
-        <div class="canvas-wrap">
+        <div class="canvas-wrap" id="canvasWrap">
           <canvas id="mapCanvas" width="1200" height="800" aria-label="Map canvas"></canvas>
           <div id="brushPreview" aria-hidden="true"></div>
         </div>
@@ -138,6 +140,28 @@
             <input id="historyStatesInput" type="number" min="5" max="200" step="1" value="20" />
           </div>
           <p class="option-warning">Warning: history states depends on your memory so be careful while adjusting this!</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="terrainSizeModal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="terrainSizeTitle">
+        <div class="modal-header">
+          <h2 id="terrainSizeTitle">Terrain Size</h2>
+          <button type="button" class="modal-close" id="terrainSizeCloseButton" aria-label="Close terrain size popup">Close</button>
+        </div>
+        <div class="modal-body">
+          <div class="option-row">
+            <label for="terrainWidthInput">Width (px)</label>
+            <input id="terrainWidthInput" type="number" min="64" max="8192" step="64" value="1200" />
+          </div>
+          <div class="option-row">
+            <label for="terrainHeightInput">Height (px)</label>
+            <input id="terrainHeightInput" type="number" min="64" max="8192" step="64" value="800" />
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="modal-close" id="terrainSizeApplyButton">Apply</button>
+          </div>
         </div>
       </div>
     </div>
