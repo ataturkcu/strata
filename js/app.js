@@ -19,7 +19,14 @@ const lineSpacingInput = document.getElementById('lineSpacingInput');
 const lineSpacingValue = document.getElementById('lineSpacingValue');
 const shapeTypeSelect = document.getElementById('shapeTypeSelect');
 const shapeModeSelect = document.getElementById('shapeModeSelect');
-const swatchButtons = document.querySelectorAll('.swatch-btn');
+const colorSwatches = document.getElementById('colorSwatches');
+const colorHistorySwatches = document.getElementById('colorHistorySwatches');
+const colorHistoryHeader = document.getElementById('colorHistoryHeader');
+const clearColorHistoryButton = document.getElementById('clearColorHistoryButton');
+const palettePickerButton = document.getElementById('palettePickerButton');
+const palettesModal = document.getElementById('palettesModal');
+const palettesCloseButton = document.getElementById('palettesCloseButton');
+const palettesList = document.getElementById('palettesList');
 const colorControls = document.getElementById('colorControls');
 const rectangleControls = document.getElementById('rectangleControls');
 const lineControls = document.getElementById('lineControls');
@@ -29,6 +36,7 @@ const optionsModal = document.getElementById('optionsModal');
 const optionsCloseButton = document.getElementById('optionsCloseButton');
 const themeSelect = document.getElementById('themeSelect');
 const historyStatesInput = document.getElementById('historyStatesInput');
+const colorHistoryLimitInput = document.getElementById('colorHistoryLimitInput');
 const showSectionDividersInput = document.getElementById('showSectionDividersInput');
 const showFineGridInput = document.getElementById('showFineGridInput');
 const viewButton = document.getElementById('viewButton');
@@ -90,12 +98,25 @@ let activeLayerId = -1;
 let context = null;
 let draggingLayerId = null;
 let renameLayerId = -1;
+let palettes = [
+  {
+    id: 'strata-default',
+    name: 'Strata Default',
+    description: 'Baseline quick colors for drawing.',
+    colors: ['#2f2f2f', '#d13b3b', '#2a7f62', '#2f5fb8', '#b98428'],
+  },
+];
+let activePaletteId = 'strata-default';
+const colorHistory = [];
 
 const minZoom = 0.25;
 const maxZoom = 4;
 const zoomStepFactor = 1.1;
 const fillTolerance = 0; // it is for clearing the flood fill "bleeding" effect, but it is causing problems so it is set to 0 not work.
 const maxLayerNameLength = 15;
+const maxPaletteColorCount = 64;
+
+let maxColorHistorySize = 64;
 
 let maxHistoryStates = 20;
 const undoStack = [];
@@ -131,6 +152,199 @@ function getDrawingContext() {
 
 function isProtectedLayer(layer) {
   return layer.name === 'Default' || layer.name === 'Legend';
+}
+
+function normalizeHexColor(color) {
+  if (typeof color !== 'string') {
+    return null;
+  }
+
+  const trimmed = color.trim();
+  if (!/^#([0-9a-fA-F]{6})$/.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed.toLowerCase();
+}
+
+function normalizePaletteEntry(entry, index) {
+  if (!entry || typeof entry !== 'object' || !Array.isArray(entry.colors)) {
+    return null;
+  }
+
+  const colors = entry.colors
+    .map((color) => normalizeHexColor(color))
+    .filter((color) => Boolean(color));
+
+  if (colors.length === 0) {
+    return null;
+  }
+
+  return {
+    id: typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : `palette-${index + 1}`,
+    name: typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : `Palette ${index + 1}`,
+    description: typeof entry.description === 'string' ? entry.description.trim() : '',
+    colors,
+  };
+}
+
+function getActivePalette() {
+  const active = palettes.find((palette) => palette.id === activePaletteId);
+  return active || palettes[0];
+}
+
+function renderColorHistorySwatches() {
+  colorHistorySwatches.innerHTML = '';
+  colorHistoryHeader.classList.toggle('is-hidden', colorHistory.length === 0);
+
+  colorHistory.forEach((color) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'swatch-btn';
+    button.dataset.color = color;
+    button.style.background = color;
+    button.setAttribute('aria-label', `History color ${color}`);
+    colorHistorySwatches.appendChild(button);
+  });
+
+  syncSwatchSelection();
+}
+
+function addColorToHistory(color, persist = true) {
+  const normalized = normalizeHexColor(color);
+  if (!normalized) {
+    return;
+  }
+
+  const existingIndex = colorHistory.indexOf(normalized);
+  if (existingIndex >= 0) {
+    colorHistory.splice(existingIndex, 1);
+  }
+
+  colorHistory.unshift(normalized);
+  if (colorHistory.length > maxColorHistorySize) {
+    colorHistory.length = maxColorHistorySize;
+  }
+
+  if (persist) {
+    localStorage.setItem('strata-color-history', JSON.stringify(colorHistory));
+  }
+
+  renderColorHistorySwatches();
+}
+
+function clampColorHistoryCount(value) {
+  return Math.min(64, Math.max(1, value));
+}
+
+function setColorHistoryCount(value) {
+  maxColorHistorySize = clampColorHistoryCount(value);
+  colorHistoryLimitInput.value = String(maxColorHistorySize);
+
+  if (colorHistory.length > maxColorHistorySize) {
+    colorHistory.length = maxColorHistorySize;
+    localStorage.setItem('strata-color-history', JSON.stringify(colorHistory));
+  }
+
+  localStorage.setItem('strata-color-history-limit', String(maxColorHistorySize));
+  renderColorHistorySwatches();
+}
+
+function clearColorHistory() {
+  colorHistory.length = 0;
+  localStorage.removeItem('strata-color-history');
+  renderColorHistorySwatches();
+}
+
+function setCurrentColor(nextColor, trackHistory = false) {
+  const normalized = normalizeHexColor(nextColor);
+  if (!normalized) {
+    return;
+  }
+
+  currentColor = normalized;
+  updateBrushAppearance();
+  localStorage.setItem('strata-brush-color', currentColor);
+
+  if (trackHistory) {
+    addColorToHistory(currentColor);
+  }
+}
+
+function renderActivePaletteSwatches() {
+  const palette = getActivePalette();
+  colorSwatches.innerHTML = '';
+
+  palette.colors.slice(0, maxPaletteColorCount).forEach((color) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'swatch-btn';
+    button.dataset.color = color;
+    button.style.background = color;
+    button.setAttribute('aria-label', `Palette color ${color}`);
+    colorSwatches.appendChild(button);
+  });
+
+  syncSwatchSelection();
+}
+
+function renderPalettesModalList() {
+  palettesList.innerHTML = '';
+
+  palettes.forEach((palette) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `palette-item${palette.id === activePaletteId ? ' is-selected' : ''}`;
+
+    const preview = palette.colors
+      .slice(0, maxPaletteColorCount)
+      .map((color) => `<span class="palette-preview-swatch" style="background:${color}"></span>`)
+      .join('');
+
+    button.innerHTML = `
+      <div class="palette-item-title">${palette.name}</div>
+      <div class="palette-item-description">${palette.description || 'No description.'}</div>
+      <div class="palette-preview">${preview}</div>
+    `;
+
+    button.addEventListener('click', () => {
+      activePaletteId = palette.id;
+      localStorage.setItem('strata-active-palette', activePaletteId);
+      renderActivePaletteSwatches();
+      renderPalettesModalList();
+      setInteractionInfo('Palette Selected', `${palette.name} loaded with ${Math.min(maxPaletteColorCount, palette.colors.length)} preview colors.`);
+      closePalettesModal();
+    });
+
+    palettesList.appendChild(button);
+  });
+}
+
+function openPalettesModal() {
+  renderPalettesModalList();
+  palettesModal.hidden = false;
+}
+
+function closePalettesModal() {
+  palettesModal.hidden = true;
+}
+
+function loadPalettesFromFiles() {
+  const externalPalettes = Array.isArray(window.strataPalettes) ? window.strataPalettes : [];
+  const loadedPalettes = externalPalettes
+    .map((entry, index) => normalizePaletteEntry(entry, index))
+    .filter((entry) => Boolean(entry));
+
+  if (loadedPalettes.length > 0) {
+    palettes = [...palettes, ...loadedPalettes.filter((palette) => !palettes.some((existing) => existing.id === palette.id))];
+  }
+
+  if (!palettes.some((palette) => palette.id === activePaletteId)) {
+    activePaletteId = palettes[0].id;
+  }
+
+  renderActivePaletteSwatches();
+  renderPalettesModalList();
 }
 
 function getToolInfo(tool) {
@@ -808,6 +1022,7 @@ function applyFillAt(x, y) {
 }
 
 function syncSwatchSelection() {
+  const swatchButtons = document.querySelectorAll('.swatch-btn');
   swatchButtons.forEach((button) => {
     button.classList.toggle('is-selected', button.dataset.color?.toLowerCase() === currentColor.toLowerCase());
   });
@@ -1096,6 +1311,10 @@ function startDraw(event) {
   updateCanvasCursor();
   const { x, y } = getCanvasPosition(event);
 
+  if (isColorTool(currentTool)) {
+    addColorToHistory(currentColor);
+  }
+
   if (currentTool === 'rectangle') {
     rectangleStartX = x;
     rectangleStartY = y;
@@ -1313,9 +1532,7 @@ toolSize.addEventListener('input', () => {
 });
 
 brushColorInput.addEventListener('input', () => {
-  currentColor = brushColorInput.value;
-  updateBrushAppearance();
-  localStorage.setItem('strata-brush-color', currentColor);
+  setCurrentColor(brushColorInput.value, false);
 });
 
 brushOpacityInput.addEventListener('input', () => {
@@ -1351,13 +1568,35 @@ shapeModeSelect.addEventListener('change', () => {
   localStorage.setItem('strata-shape-mode', currentShapeMode);
 });
 
-swatchButtons.forEach((button) => {
-  button.addEventListener('click', () => {
-    currentColor = button.dataset.color || currentColor;
-    updateBrushAppearance();
-    localStorage.setItem('strata-brush-color', currentColor);
-  });
+colorSwatches.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const swatchButton = target.closest('.swatch-btn');
+  if (!(swatchButton instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  setCurrentColor(swatchButton.dataset.color || currentColor, false);
 });
+
+colorHistorySwatches.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const swatchButton = target.closest('.swatch-btn');
+  if (!(swatchButton instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  setCurrentColor(swatchButton.dataset.color || currentColor, false);
+});
+
+clearColorHistoryButton.addEventListener('click', clearColorHistory);
 
 canvas.addEventListener('pointerdown', (event) => {
   if (event.button === 0 && event.shiftKey) {
@@ -1462,6 +1701,16 @@ historyStatesInput.addEventListener('change', () => {
   setHistoryStateCount(parsed);
 });
 
+colorHistoryLimitInput.addEventListener('change', () => {
+  const parsed = Number(colorHistoryLimitInput.value);
+  if (Number.isNaN(parsed)) {
+    colorHistoryLimitInput.value = String(maxColorHistorySize);
+    return;
+  }
+
+  setColorHistoryCount(parsed);
+});
+
 showSectionDividersInput.addEventListener('change', () => {
   showSectionDividers = showSectionDividersInput.checked;
   updateGridVisibility();
@@ -1541,6 +1790,15 @@ terrainSizeModal.addEventListener('click', (event) => {
   }
 });
 
+palettePickerButton.addEventListener('click', openPalettesModal);
+palettesCloseButton.addEventListener('click', closePalettesModal);
+
+palettesModal.addEventListener('click', (event) => {
+  if (event.target === palettesModal) {
+    closePalettesModal();
+  }
+});
+
 renameLayerCloseButton.addEventListener('click', closeRenameLayerModal);
 renameLayerApplyButton.addEventListener('click', applyRenameLayer);
 
@@ -1579,6 +1837,11 @@ window.addEventListener('keydown', (event) => {
 
   if (event.key === 'Escape' && !terrainSizeModal.hidden) {
     closeTerrainSizeModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && !palettesModal.hidden) {
+    closePalettesModal();
     return;
   }
 
@@ -1623,6 +1886,11 @@ function clearCanvas() {
 const savedTheme = localStorage.getItem('strata-theme') || 'dark';
 applyTheme(savedTheme);
 
+const savedPaletteId = localStorage.getItem('strata-active-palette');
+if (savedPaletteId) {
+  activePaletteId = savedPaletteId;
+}
+
 const savedTerrainWidth = Number(localStorage.getItem('strata-terrain-width') || String(canvas.width));
 const savedTerrainHeight = Number(localStorage.getItem('strata-terrain-height') || String(canvas.height));
 if (!Number.isNaN(savedTerrainWidth) && !Number.isNaN(savedTerrainHeight)) {
@@ -1648,6 +1916,33 @@ if (savedShowFineGrid !== null) {
 const savedBrushColor = localStorage.getItem('strata-brush-color');
 if (savedBrushColor) {
   currentColor = savedBrushColor;
+}
+
+const savedColorHistoryLimit = Number(localStorage.getItem('strata-color-history-limit') || '64');
+if (!Number.isNaN(savedColorHistoryLimit)) {
+  setColorHistoryCount(savedColorHistoryLimit);
+} else {
+  colorHistoryLimitInput.value = String(maxColorHistorySize);
+}
+
+const savedColorHistory = localStorage.getItem('strata-color-history');
+if (savedColorHistory) {
+  try {
+    const parsedHistory = JSON.parse(savedColorHistory);
+    if (Array.isArray(parsedHistory)) {
+      parsedHistory
+        .map((color) => normalizeHexColor(color))
+        .filter((color) => Boolean(color))
+        .slice(0, maxColorHistorySize)
+        .forEach((color) => {
+          if (colorHistory.indexOf(color) < 0) {
+            colorHistory.push(color);
+          }
+        });
+    }
+  } catch (error) {
+    // Ignore invalid color history cache.
+  }
 }
 
 const savedBrushOpacity = Number(localStorage.getItem('strata-brush-opacity') || '100');
@@ -1717,5 +2012,7 @@ updateShapeControlsVisibility();
 cornerRadiusValue.textContent = String(currentCornerRadius);
 lineSpacingValue.textContent = String(currentLineSpacing);
 updateCanvasCursor();
+loadPalettesFromFiles();
+renderColorHistorySwatches();
 refreshLucideIcons();
 openTerrainSizeModal();

@@ -454,15 +454,76 @@ body {
 }
 
 .color-swatches {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 4px;
   padding-left: 66px;
 }
 
+.color-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 66px;
+  margin-top: 2px;
+}
+
+.color-history-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.color-history-clear {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.color-history-clear:hover,
+.color-history-clear:focus-visible {
+  color: var(--text);
+  text-decoration: underline;
+  outline: none;
+}
+
+.color-history-swatches {
+  margin-top: -2px;
+}
+
+.palette-row {
+  align-items: center;
+}
+
+.palette-picker-btn {
+  width: 32px;
+  height: 28px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-elev);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.palette-picker-btn:hover,
+.palette-picker-btn:focus-visible {
+  background: var(--menu-hover-bg);
+  outline: none;
+}
+
+.palette-picker-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
 .swatch-btn {
-  width: 18px;
-  height: 18px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 18px;
   border: 1px solid var(--panel-border);
   cursor: pointer;
 }
@@ -630,6 +691,55 @@ body {
   display: flex;
   justify-content: flex-end;
   margin-top: 10px;
+}
+
+.palette-list {
+  display: grid;
+  gap: 8px;
+}
+
+.palette-item {
+  width: 100%;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-elev);
+  color: var(--text);
+  text-align: left;
+  padding: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+}
+
+.palette-item:hover,
+.palette-item:focus-visible {
+  background: var(--menu-hover-bg);
+  outline: none;
+}
+
+.palette-item.is-selected {
+  border-color: var(--active-border);
+}
+
+.palette-item-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.palette-item-description {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.palette-preview {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.palette-preview-swatch {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--panel-border);
 }
 
 .option-row {

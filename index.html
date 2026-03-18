@@ -100,12 +100,18 @@
                 <input id="brushOpacity" type="range" min="10" max="100" value="100" />
                 <span id="brushOpacityValue">100%</span>
               </div>
-              <div class="color-swatches" aria-label="Quick brush colors">
-                <button type="button" class="swatch-btn" data-color="#2f2f2f" style="background:#2f2f2f" aria-label="Dark gray"></button>
-                <button type="button" class="swatch-btn" data-color="#d13b3b" style="background:#d13b3b" aria-label="Red"></button>
-                <button type="button" class="swatch-btn" data-color="#2a7f62" style="background:#2a7f62" aria-label="Green"></button>
-                <button type="button" class="swatch-btn" data-color="#2f5fb8" style="background:#2f5fb8" aria-label="Blue"></button>
-                <button type="button" class="swatch-btn" data-color="#b98428" style="background:#b98428" aria-label="Sand"></button>
+              <div class="property-row palette-row">
+                <label for="palettePickerButton">Palettes</label>
+                <button type="button" id="palettePickerButton" class="palette-picker-btn" aria-label="Open palettes popup"><i data-lucide="ellipsis"></i></button>
+                <span></span>
+              </div>
+              <div class="color-swatches" id="colorSwatches" aria-label="Quick brush colors">
+              </div>
+              <div class="color-history-header" id="colorHistoryHeader">
+                <span class="color-history-label">Color History</span>
+                <button type="button" class="color-history-clear" id="clearColorHistoryButton">Clear</button>
+              </div>
+              <div class="color-swatches color-history-swatches" id="colorHistorySwatches" aria-label="Recently used colors">
               </div>
             </div>
             <div id="rectangleControls" class="property-group is-hidden">
@@ -168,7 +174,7 @@
           <button type="button" class="modal-close" id="aboutCloseButton" aria-label="Close about popup">Close</button>
         </div>
         <div class="modal-body">
-          <p>Version 0.1.0</p>
+          <p>Version 0.2.0</p>
           <p>Made by <a href="https://github.com/ataturkcu" target="_blank" rel="noopener noreferrer">ataturkcu</a></p>
           <p>Licensed under MIT: <a href="https://github.com/ataturkcu/strata/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">View License</a></p>
           <p>View source code: <a href="https://github.com/ataturkcu/strata" target="_blank" rel="noopener noreferrer">GitHub Repository</a></p>
@@ -210,6 +216,10 @@
           <div class="option-row">
             <label for="historyStatesInput">History States</label>
             <input id="historyStatesInput" type="number" min="5" max="200" step="1" value="20" />
+          </div>
+          <div class="option-row">
+            <label for="colorHistoryLimitInput">Color History Limit</label>
+            <input id="colorHistoryLimitInput" type="number" min="1" max="64" step="1" value="64" />
           </div>
           <div class="option-row option-check-row">
             <label for="showSectionDividersInput">Show Section Dividers</label>
@@ -268,7 +278,24 @@
       </div>
     </div>
 
+    <div class="modal" id="palettesModal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="palettesTitle">
+        <div class="modal-header">
+          <h2 id="palettesTitle">Palettes</h2>
+          <button type="button" class="modal-close" id="palettesCloseButton" aria-label="Close palettes popup">Close</button>
+        </div>
+        <div class="modal-body">
+          <div class="palette-list" id="palettesList"></div>
+        </div>
+      </div>
+    </div>
+
     <script src="js/vendor/lucide.min.js"></script>
+    <script src="palettes/island-atlas.palette.js"></script>
+    <script src="palettes/emerald-frontier.palette.js"></script>
+    <script src="palettes/arid-basin.palette.js"></script>
+    <script src="palettes/volcanic-ridge.palette.js"></script>
+    <script src="palettes/polar-shore.palette.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>

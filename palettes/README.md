@@ -1,0 +1,1 @@
+If you want to contribute to the Strata by adding palette, just copy one of the palette's file and change the colors (max 64), name and description & than create pull request!
