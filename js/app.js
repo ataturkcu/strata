@@ -358,11 +358,11 @@ function syncActiveContext() {
   context = drawContext || displayContext;
 }
 
-function getEyeIcon(visible) {
-  if (visible) {
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+function refreshLucideIcons() {
+  if (!window.lucide || typeof window.lucide.createIcons !== 'function') {
+    return;
   }
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.77 21.77 0 0 1 5.17-5.94"></path><path d="M9.9 4.24A10.94 10.94 0 0 1 12 5c7 0 11 7 11 7a21.8 21.8 0 0 1-3.06 4.2"></path><path d="M1 1l22 22"></path></svg>';
+  window.lucide.createIcons();
 }
 
 function renderLayersList() {
@@ -412,7 +412,7 @@ function renderLayersList() {
     eyeButton.type = 'button';
     eyeButton.className = 'layer-eye-btn';
     eyeButton.setAttribute('aria-label', layer.visible ? 'Hide layer' : 'Show layer');
-    eyeButton.innerHTML = getEyeIcon(layer.visible);
+    eyeButton.innerHTML = `<i data-lucide="${layer.visible ? 'eye' : 'eye-off'}"></i>`;
     eyeButton.addEventListener('click', () => {
       layer.visible = !layer.visible;
       renderLayersList();
@@ -423,7 +423,7 @@ function renderLayersList() {
     const layerButton = document.createElement('button');
     layerButton.type = 'button';
     layerButton.className = `layer-btn${layer.id === activeLayerId ? ' is-active' : ''}`;
-    layerButton.textContent = layer.name;
+    layerButton.innerHTML = `<span class="tool-icon" aria-hidden="true"><i data-lucide="layers"></i></span><span class="layer-label">${layer.name}</span>`;
     layerButton.addEventListener('click', () => {
       if (activeLayerId === layer.id) {
         return;
@@ -485,6 +485,8 @@ function renderLayersList() {
 
     layersList.appendChild(li);
   });
+
+  refreshLucideIcons();
 }
 
 function renderVisibleLayers() {
@@ -1715,4 +1717,5 @@ updateShapeControlsVisibility();
 cornerRadiusValue.textContent = String(currentCornerRadius);
 lineSpacingValue.textContent = String(currentLineSpacing);
 updateCanvasCursor();
+refreshLucideIcons();
 openTerrainSizeModal();

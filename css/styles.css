@@ -248,6 +248,9 @@ body {
 .layer-btn {
   width: 100%;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
   border: 1px solid var(--panel-border);
   background: var(--panel-elev);
@@ -257,7 +260,52 @@ body {
   font-size: 13px;
 }
 
+.tool-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 14px;
+}
+
+.tool-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tool-icon i {
+  display: inline-flex;
+}
+
+.panel-title-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel-title-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-title-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.panel-title-icon i {
+  display: inline-flex;
+}
+
 .layer-btn {
+  overflow: hidden;
+}
+
+.layer-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

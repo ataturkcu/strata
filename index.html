@@ -25,22 +25,22 @@
         <section class="panel">
           <h2>Drawing Tools</h2>
           <div class="tool-list">
-            <button type="button" class="tool-btn is-active" data-tool="brush">Brush</button>
-            <button type="button" class="tool-btn" data-tool="rectangle">Rectangle</button>
-            <button type="button" class="tool-btn" data-tool="line">Line</button>
-            <button type="button" class="tool-btn" data-tool="fill">Fill / Bucket</button>
-            <button type="button" class="tool-btn" data-tool="eraser">Eraser</button>
-            <button type="button" class="tool-btn" data-tool="shape">Shape</button>
+            <button type="button" class="tool-btn is-active" data-tool="brush"><span class="tool-icon" aria-hidden="true"><i data-lucide="paintbrush"></i></span><span>Brush</span></button>
+            <button type="button" class="tool-btn" data-tool="rectangle"><span class="tool-icon" aria-hidden="true"><i data-lucide="square"></i></span><span>Rectangle</span></button>
+            <button type="button" class="tool-btn" data-tool="line"><span class="tool-icon" aria-hidden="true"><i data-lucide="slash"></i></span><span>Line</span></button>
+            <button type="button" class="tool-btn" data-tool="fill"><span class="tool-icon" aria-hidden="true"><i data-lucide="paint-bucket"></i></span><span>Fill / Bucket</span></button>
+            <button type="button" class="tool-btn" data-tool="eraser"><span class="tool-icon" aria-hidden="true"><i data-lucide="eraser"></i></span><span>Eraser</span></button>
+            <button type="button" class="tool-btn" data-tool="shape"><span class="tool-icon" aria-hidden="true"><i data-lucide="shapes"></i></span><span>Shape</span></button>
           </div>
         </section>
 
         <section class="panel">
           <h2>Terrain Tools</h2>
           <div class="tool-list">
-            <button type="button" class="tool-btn" data-tool="height-brush">Height Brush</button>
-            <button type="button" class="tool-btn" data-tool="slope">Slope</button>
-            <button type="button" class="tool-btn" data-tool="smooth">Smooth</button>
-            <button type="button" class="tool-btn" data-tool="biome-paint">Biome Paint</button>
+            <button type="button" class="tool-btn" data-tool="height-brush"><span class="tool-icon" aria-hidden="true"><i data-lucide="mountain"></i></span><span>Height Brush</span></button>
+            <button type="button" class="tool-btn" data-tool="slope"><span class="tool-icon" aria-hidden="true"><i data-lucide="triangle"></i></span><span>Slope</span></button>
+            <button type="button" class="tool-btn" data-tool="smooth"><span class="tool-icon" aria-hidden="true"><i data-lucide="waves"></i></span><span>Smooth</span></button>
+            <button type="button" class="tool-btn" data-tool="biome-paint"><span class="tool-icon" aria-hidden="true"><i data-lucide="leaf"></i></span><span>Biome Paint</span></button>
           </div>
           <div class="panel-meta" id="mouseCoords">Mouse: x -, y -</div>
           <div class="panel-meta" id="zoomStatus">Zoom: 100%</div>
@@ -71,7 +71,7 @@
       <aside class="sidebar right" aria-label="Layers and properties panel">
         <section class="panel">
           <div class="panel-title-row">
-            <h2>Layers</h2>
+            <h2 class="panel-title-with-icon"><span class="panel-title-icon" aria-hidden="true"><i data-lucide="layers"></i></span><span>Layers</span></h2>
             <button type="button" class="panel-title-action" id="addLayerButton" aria-label="Add layer">+</button>
           </div>
           <ul class="layer-list" id="layersList"></ul>
@@ -268,6 +268,7 @@
       </div>
     </div>
 
+    <script src="js/vendor/lucide.min.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>
