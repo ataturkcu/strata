@@ -1,9 +1,12 @@
 const toolButtons = document.querySelectorAll('.tool-btn');
-const layerButtons = document.querySelectorAll('.layer-btn');
+const addLayerButton = document.getElementById('addLayerButton');
+const layersList = document.getElementById('layersList');
 const activeToolLabel = document.getElementById('activeToolLabel');
 const mouseCoords = document.getElementById('mouseCoords');
 const zoomStatus = document.getElementById('zoomStatus');
 const terrainSizeStatus = document.getElementById('terrainSizeStatus');
+const infoTitle = document.getElementById('infoTitle');
+const infoDescription = document.getElementById('infoDescription');
 const toolSize = document.getElementById('toolSize');
 const toolSizeValue = document.getElementById('toolSizeValue');
 const brushColorInput = document.getElementById('brushColor');
@@ -35,6 +38,10 @@ const terrainWidthInput = document.getElementById('terrainWidthInput');
 const terrainHeightInput = document.getElementById('terrainHeightInput');
 const terrainDividerInput = document.getElementById('terrainDividerInput');
 const terrainSizeApplyButton = document.getElementById('terrainSizeApplyButton');
+const renameLayerModal = document.getElementById('renameLayerModal');
+const renameLayerCloseButton = document.getElementById('renameLayerCloseButton');
+const renameLayerInput = document.getElementById('renameLayerInput');
+const renameLayerApplyButton = document.getElementById('renameLayerApplyButton');
 const shortcutsButton = document.getElementById('shortcutsButton');
 const shortcutsModal = document.getElementById('shortcutsModal');
 const shortcutsCloseButton = document.getElementById('shortcutsCloseButton');
@@ -44,7 +51,7 @@ const aboutCloseButton = document.getElementById('aboutCloseButton');
 const canvasWrap = document.getElementById('canvasWrap');
 const canvas = document.getElementById('mapCanvas');
 const brushPreview = document.getElementById('brushPreview');
-const context = canvas.getContext('2d');
+const displayContext = canvas.getContext('2d');
 
 let isDrawing = false;
 let currentTool = 'brush';
@@ -78,14 +85,441 @@ let shapeStartX = 0;
 let shapeStartY = 0;
 let shapeSnapshot = null;
 
+const layers = [];
+let activeLayerId = -1;
+let context = null;
+let draggingLayerId = null;
+let renameLayerId = -1;
+
 const minZoom = 0.25;
 const maxZoom = 4;
 const zoomStepFactor = 1.1;
 const fillTolerance = 0; // it is for clearing the flood fill "bleeding" effect, but it is causing problems so it is set to 0 not work.
+const maxLayerNameLength = 15;
 
 let maxHistoryStates = 20;
 const undoStack = [];
 const redoStack = [];
+
+function createLayer(name) {
+  const layerCanvas = document.createElement('canvas');
+  layerCanvas.width = canvas.width;
+  layerCanvas.height = canvas.height;
+  const finalName = String(name).slice(0, maxLayerNameLength);
+
+  return {
+    id: Date.now() + Math.random(),
+    name: finalName,
+    visible: true,
+    canvas: layerCanvas,
+    context: layerCanvas.getContext('2d'),
+  };
+}
+
+function getActiveLayer() {
+  const active = layers.find((layer) => layer.id === activeLayerId);
+  return active || layers[0] || null;
+}
+
+function getDrawingContext() {
+  const activeLayer = getActiveLayer();
+  if (!activeLayer) {
+    return null;
+  }
+  return activeLayer.context;
+}
+
+function isProtectedLayer(layer) {
+  return layer.name === 'Default' || layer.name === 'Legend';
+}
+
+function getToolInfo(tool) {
+  if (tool === 'brush') {
+    return {
+      title: 'Brush',
+      description: 'You can freely draw lines on your map with the brush.',
+    };
+  }
+  if (tool === 'rectangle') {
+    return {
+      title: 'Rectangle',
+      description: 'Draw a rectangle by dragging on the canvas. Radius controls corner roundness.',
+    };
+  }
+  if (tool === 'line') {
+    return {
+      title: 'Line',
+      description: 'Draw straight lines by dragging from start to end. Style and spacing affect the stroke.',
+    };
+  }
+  if (tool === 'fill') {
+    return {
+      title: 'Fill / Bucket',
+      description: 'Click an area to flood fill connected pixels with the current color.',
+    };
+  }
+  if (tool === 'eraser') {
+    return {
+      title: 'Eraser',
+      description: 'Erase painted parts on the active layer using the current size.',
+    };
+  }
+  if (tool === 'shape') {
+    return {
+      title: 'Shape',
+      description: 'Drag to place shapes like circles, polygons, stars, and arrows.',
+    };
+  }
+  if (tool === 'height-brush') {
+    return {
+      title: 'Height Brush',
+      description: 'Terrain tool mode selected. Height painting behavior can be expanded later.',
+    };
+  }
+  if (tool === 'slope') {
+    return {
+      title: 'Slope',
+      description: 'Terrain slope mode selected for shaping transitions.',
+    };
+  }
+  if (tool === 'smooth') {
+    return {
+      title: 'Smooth',
+      description: 'Terrain smooth mode selected for softening local changes.',
+    };
+  }
+  if (tool === 'biome-paint') {
+    return {
+      title: 'Biome Paint',
+      description: 'Terrain biome mode selected for painting biome regions.',
+    };
+  }
+  return {
+    title: 'Information',
+    description: 'Select a tool or interact with layers to see context here.',
+  };
+}
+
+function setInteractionInfo(title, description) {
+  infoTitle.textContent = title;
+  infoDescription.textContent = description;
+}
+
+function getLayerSelectionInfo(layer) {
+  if (layer.name === 'Legend') {
+    return {
+      title: 'Legend Layer',
+      description: 'Use this layer for symbols and markers shown on your map legend. This layer is protected and cannot be deleted.',
+    };
+  }
+
+  if (layer.name === 'Default') {
+    return {
+      title: 'Default Layer',
+      description: 'This is your default layer, useful for background/base drawing. This layer is protected and cannot be deleted.',
+    };
+  }
+
+  return {
+    title: 'Layer Selected',
+    description: `${layer.name} is now the active layer for editing.`,
+  };
+}
+
+function moveLayerToIndex(layerId, targetIndex) {
+  const currentIndex = layers.findIndex((layer) => layer.id === layerId);
+  if (currentIndex < 0) {
+    return;
+  }
+
+  const movingLayerName = layers[currentIndex].name;
+
+  const boundedTarget = Math.max(0, Math.min(layers.length - 1, targetIndex));
+  if (currentIndex === boundedTarget) {
+    return;
+  }
+
+  const movingLayer = layers[currentIndex];
+  layers.splice(currentIndex, 1);
+
+  let insertIndex = boundedTarget;
+  if (currentIndex < boundedTarget) {
+    insertIndex -= 1;
+  }
+  layers.splice(insertIndex, 0, movingLayer);
+
+  renderLayersList();
+  renderVisibleLayers();
+  setInteractionInfo('Layer Moved', `${movingLayerName} moved to a different priority.`);
+}
+
+function moveLayerByPriority(layerId, direction) {
+  const index = layers.findIndex((layer) => layer.id === layerId);
+  if (index < 0) {
+    return;
+  }
+
+  const movingLayerName = layers[index].name;
+
+  const nextIndex = index + direction;
+  if (nextIndex < 0 || nextIndex >= layers.length) {
+    return;
+  }
+
+  const temp = layers[index];
+  layers[index] = layers[nextIndex];
+  layers[nextIndex] = temp;
+
+  renderLayersList();
+  renderVisibleLayers();
+  setInteractionInfo('Layer Moved', `${movingLayerName} moved to a different priority.`);
+}
+
+function deleteLayer(layerId) {
+  const index = layers.findIndex((layer) => layer.id === layerId);
+  if (index < 0) {
+    return;
+  }
+
+  const layer = layers[index];
+  if (isProtectedLayer(layer)) {
+    return;
+  }
+
+  const removedLayerName = layer.name;
+
+  const wasActive = activeLayerId === layerId;
+  layers.splice(index, 1);
+
+  if (wasActive) {
+    const fallback = layers[Math.max(0, index - 1)] || layers[0] || null;
+    activeLayerId = fallback ? fallback.id : -1;
+    syncActiveContext();
+    undoStack.length = 0;
+    redoStack.length = 0;
+    pushHistoryState();
+  }
+
+  renderLayersList();
+  renderVisibleLayers();
+  setInteractionInfo('Layer Deleted', `${removedLayerName} was removed from the layer list.`);
+}
+
+function renameLayer(layerId) {
+  const layer = layers.find((entry) => entry.id === layerId);
+  if (!layer) {
+    return;
+  }
+
+  if (isProtectedLayer(layer)) {
+    setInteractionInfo('Rename Blocked', `${layer.name} cannot be renamed.`);
+    return;
+  }
+
+  renameLayerId = layer.id;
+  renameLayerInput.value = layer.name;
+  renameLayerModal.hidden = false;
+  renameLayerInput.focus();
+  renameLayerInput.select();
+  setInteractionInfo('Rename Layer', `Editing name for ${layer.name}.`);
+}
+
+function closeRenameLayerModal() {
+  renameLayerId = -1;
+  renameLayerModal.hidden = true;
+}
+
+function applyRenameLayer() {
+  if (renameLayerId < 0) {
+    return;
+  }
+
+  const layer = layers.find((entry) => entry.id === renameLayerId);
+  if (!layer || isProtectedLayer(layer)) {
+    closeRenameLayerModal();
+    return;
+  }
+
+  const previousName = layer.name;
+  const trimmedName = renameLayerInput.value.trim().slice(0, maxLayerNameLength);
+  if (!trimmedName || trimmedName === layer.name) {
+    closeRenameLayerModal();
+    return;
+  }
+
+  layer.name = trimmedName;
+  closeRenameLayerModal();
+  renderLayersList();
+  setInteractionInfo('Layer Renamed', `${previousName} renamed to ${trimmedName}.`);
+}
+
+function syncActiveContext() {
+  const drawContext = getDrawingContext();
+  context = drawContext || displayContext;
+}
+
+function getEyeIcon(visible) {
+  if (visible) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.77 21.77 0 0 1 5.17-5.94"></path><path d="M9.9 4.24A10.94 10.94 0 0 1 12 5c7 0 11 7 11 7a21.8 21.8 0 0 1-3.06 4.2"></path><path d="M1 1l22 22"></path></svg>';
+}
+
+function renderLayersList() {
+  layersList.innerHTML = '';
+
+  const visualLayers = [...layers].reverse();
+  visualLayers.forEach((layer) => {
+    const li = document.createElement('li');
+    li.className = 'layer-row';
+    li.draggable = true;
+
+    li.addEventListener('dragstart', (event) => {
+      draggingLayerId = layer.id;
+      event.dataTransfer.effectAllowed = 'move';
+      li.classList.add('is-dragging');
+    });
+
+    li.addEventListener('dragend', () => {
+      draggingLayerId = null;
+      li.classList.remove('is-dragging');
+    });
+
+    li.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      li.classList.add('is-drop-target');
+      event.dataTransfer.dropEffect = 'move';
+    });
+
+    li.addEventListener('dragleave', () => {
+      li.classList.remove('is-drop-target');
+    });
+
+    li.addEventListener('drop', (event) => {
+      event.preventDefault();
+      li.classList.remove('is-drop-target');
+      if (!draggingLayerId || draggingLayerId === layer.id) {
+        return;
+      }
+
+      const targetIndex = layers.findIndex((l) => l.id === layer.id);
+      const placeAboveVisual = event.offsetY < li.clientHeight / 2;
+      const insertIndex = placeAboveVisual ? targetIndex + 1 : targetIndex;
+      moveLayerToIndex(draggingLayerId, insertIndex);
+    });
+
+    const eyeButton = document.createElement('button');
+    eyeButton.type = 'button';
+    eyeButton.className = 'layer-eye-btn';
+    eyeButton.setAttribute('aria-label', layer.visible ? 'Hide layer' : 'Show layer');
+    eyeButton.innerHTML = getEyeIcon(layer.visible);
+    eyeButton.addEventListener('click', () => {
+      layer.visible = !layer.visible;
+      renderLayersList();
+      renderVisibleLayers();
+      setInteractionInfo('Layer Visibility', `${layer.name} is now ${layer.visible ? 'visible' : 'hidden'}.`);
+    });
+
+    const layerButton = document.createElement('button');
+    layerButton.type = 'button';
+    layerButton.className = `layer-btn${layer.id === activeLayerId ? ' is-active' : ''}`;
+    layerButton.textContent = layer.name;
+    layerButton.addEventListener('click', () => {
+      if (activeLayerId === layer.id) {
+        return;
+      }
+
+      activeLayerId = layer.id;
+      syncActiveContext();
+      undoStack.length = 0;
+      redoStack.length = 0;
+      pushHistoryState();
+      const layerButtons = layersList.querySelectorAll('.layer-btn');
+      layerButtons.forEach((button) => button.classList.remove('is-active'));
+      layerButton.classList.add('is-active');
+      const layerInfo = getLayerSelectionInfo(layer);
+      setInteractionInfo(layerInfo.title, layerInfo.description);
+    });
+    layerButton.addEventListener('dblclick', () => {
+      renameLayer(layer.id);
+    });
+
+    li.appendChild(eyeButton);
+    li.appendChild(layerButton);
+
+    const actions = document.createElement('div');
+    actions.className = 'layer-actions';
+
+    const upButton = document.createElement('button');
+    upButton.type = 'button';
+    upButton.className = 'layer-action-btn';
+    upButton.textContent = '▲';
+    upButton.setAttribute('aria-label', 'Move layer up');
+    upButton.addEventListener('click', () => {
+      moveLayerByPriority(layer.id, 1);
+    });
+
+    const downButton = document.createElement('button');
+    downButton.type = 'button';
+    downButton.className = 'layer-action-btn';
+    downButton.textContent = '▼';
+    downButton.setAttribute('aria-label', 'Move layer down');
+    downButton.addEventListener('click', () => {
+      moveLayerByPriority(layer.id, -1);
+    });
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'layer-action-btn';
+    deleteButton.textContent = 'Del';
+    deleteButton.setAttribute('aria-label', 'Delete layer');
+    deleteButton.disabled = isProtectedLayer(layer);
+    deleteButton.addEventListener('click', () => {
+      deleteLayer(layer.id);
+    });
+
+    actions.appendChild(upButton);
+    actions.appendChild(downButton);
+    actions.appendChild(deleteButton);
+    li.appendChild(actions);
+
+    layersList.appendChild(li);
+  });
+}
+
+function renderVisibleLayers() {
+  displayContext.clearRect(0, 0, canvas.width, canvas.height);
+  layers.forEach((layer) => {
+    if (layer.visible) {
+      displayContext.drawImage(layer.canvas, 0, 0);
+    }
+  });
+}
+
+function addLayer(name) {
+  const layer = createLayer(name);
+  layers.push(layer);
+  activeLayerId = layer.id;
+  syncActiveContext();
+  undoStack.length = 0;
+  redoStack.length = 0;
+  pushHistoryState();
+  renderLayersList();
+  renderVisibleLayers();
+  setInteractionInfo('Layer Added', `${layer.name} was created and selected.`);
+}
+
+function initializeLayers() {
+  layers.length = 0;
+  layers.push(createLayer('Default'));
+  layers.push(createLayer('Legend'));
+  activeLayerId = layers[0].id;
+  syncActiveContext();
+  renderLayersList();
+  renderVisibleLayers();
+  const initialToolInfo = getToolInfo('brush');
+  setInteractionInfo(initialToolInfo.title, initialToolInfo.description);
+}
 
 function clampHistoryStateCount(value) {
   return Math.min(200, Math.max(5, value));
@@ -98,15 +532,27 @@ function enforceHistoryLimit() {
 }
 
 function getCanvasSnapshot() {
-  return context.getImageData(0, 0, canvas.width, canvas.height);
+  const drawContext = getDrawingContext();
+  if (!drawContext) {
+    return null;
+  }
+  return drawContext.getImageData(0, 0, canvas.width, canvas.height);
 }
 
 function restoreCanvasSnapshot(snapshot) {
-  context.putImageData(snapshot, 0, 0);
+  const drawContext = getDrawingContext();
+  if (!drawContext || !snapshot) {
+    return;
+  }
+  drawContext.putImageData(snapshot, 0, 0);
 }
 
 function pushHistoryState() {
-  undoStack.push(getCanvasSnapshot());
+  const snapshot = getCanvasSnapshot();
+  if (!snapshot) {
+    return;
+  }
+  undoStack.push(snapshot);
   enforceHistoryLimit();
 }
 
@@ -123,6 +569,7 @@ function undo() {
   const current = undoStack.pop();
   redoStack.push(current);
   restoreCanvasSnapshot(undoStack[undoStack.length - 1]);
+  renderVisibleLayers();
 }
 
 function redo() {
@@ -133,6 +580,7 @@ function redo() {
   const next = redoStack.pop();
   undoStack.push(next);
   restoreCanvasSnapshot(next);
+  renderVisibleLayers();
 }
 
 function applyTheme(theme) {
@@ -353,6 +801,7 @@ function applyFillAt(x, y) {
   }
 
   context.putImageData(imageData, 0, 0);
+  renderVisibleLayers();
   return true;
 }
 
@@ -612,13 +1061,14 @@ toolButtons.forEach((button) => {
     updateLineControlsVisibility();
     updateShapeControlsVisibility();
     updateCanvasCursor();
+    const toolInfo = getToolInfo(tool);
+    setInteractionInfo(toolInfo.title, toolInfo.description);
   });
 });
 
-layerButtons.forEach((button) => {
-  button.addEventListener('click', () => {
-    setActive(layerButtons, button, 'is-active');
-  });
+addLayerButton.addEventListener('click', () => {
+  const userLayers = Math.max(0, layers.length - 2);
+  addLayer(`Layer ${userLayers + 1}`);
 });
 
 function getCanvasPosition(event) {
@@ -693,6 +1143,7 @@ function endDraw() {
   shapeSnapshot = null;
   context.beginPath();
   context.setLineDash([]);
+  renderVisibleLayers();
   releasePointerIfCaptured();
   updateCanvasCursor();
 }
@@ -759,6 +1210,7 @@ function draw(event) {
     } else {
       context.strokeRect(left, top, width, height);
     }
+    renderVisibleLayers();
     hasPendingStrokeChange = width > 0 || height > 0;
     return;
   }
@@ -782,6 +1234,7 @@ function draw(event) {
     context.lineTo(x, y);
     context.stroke();
     context.setLineDash([]);
+    renderVisibleLayers();
 
     hasPendingStrokeChange = x !== lineStartX || y !== lineStartY;
     return;
@@ -817,6 +1270,8 @@ function draw(event) {
       context.stroke();
     }
 
+    renderVisibleLayers();
+
     hasPendingStrokeChange = true;
     return;
   }
@@ -830,6 +1285,7 @@ function draw(event) {
     context.arc(x, y, currentSize / 2, 0, Math.PI * 2);
     context.fill();
     context.restore();
+    renderVisibleLayers();
     return;
   }
 
@@ -846,6 +1302,7 @@ function draw(event) {
   context.stroke();
   context.beginPath();
   context.moveTo(x, y);
+  renderVisibleLayers();
 }
 
 toolSize.addEventListener('input', () => {
@@ -1053,6 +1510,12 @@ function applyTerrainSize() {
 
   canvas.width = width;
   canvas.height = height;
+  layers.forEach((layer) => {
+    layer.canvas.width = width;
+    layer.canvas.height = height;
+    layer.context = layer.canvas.getContext('2d');
+  });
+  syncActiveContext();
   updateCanvasDisplaySize();
   updateViewStatus();
   localStorage.setItem('strata-terrain-width', String(width));
@@ -1073,6 +1536,21 @@ terrainSizeApplyButton.addEventListener('click', applyTerrainSize);
 terrainSizeModal.addEventListener('click', (event) => {
   if (event.target === terrainSizeModal) {
     closeTerrainSizeModal();
+  }
+});
+
+renameLayerCloseButton.addEventListener('click', closeRenameLayerModal);
+renameLayerApplyButton.addEventListener('click', applyRenameLayer);
+
+renameLayerModal.addEventListener('click', (event) => {
+  if (event.target === renameLayerModal) {
+    closeRenameLayerModal();
+  }
+});
+
+renameLayerInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    applyRenameLayer();
   }
 });
 
@@ -1099,6 +1577,11 @@ window.addEventListener('keydown', (event) => {
 
   if (event.key === 'Escape' && !terrainSizeModal.hidden) {
     closeTerrainSizeModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && !renameLayerModal.hidden) {
+    closeRenameLayerModal();
     return;
   }
 
@@ -1129,7 +1612,10 @@ window.addEventListener('keyup', (event) => {
 });
 
 function clearCanvas() {
-  context.clearRect(0, 0, canvas.width, canvas.height);
+  layers.forEach((layer) => {
+    layer.context.clearRect(0, 0, canvas.width, canvas.height);
+  });
+  renderVisibleLayers();
 }
 
 const savedTheme = localStorage.getItem('strata-theme') || 'dark';
@@ -1216,6 +1702,7 @@ if (!Number.isNaN(savedHistoryStates)) {
 }
 
 clearCanvas();
+initializeLayers();
 updateCanvasDisplaySize();
 updateGridVisibility();
 updateViewStatus();

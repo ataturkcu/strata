@@ -46,6 +46,14 @@
           <div class="panel-meta" id="zoomStatus">Zoom: 100%</div>
           <div class="panel-meta" id="terrainSizeStatus">Terrain: 1200 x 800</div>
         </section>
+
+        <section class="panel">
+          <h2>Information</h2>
+          <div class="info-box">
+            <div class="info-title" id="infoTitle">Brush</div>
+            <div class="info-description" id="infoDescription">You can freely draw lines on your map with the brush.</div>
+          </div>
+        </section>
       </aside>
 
       <section class="editor" aria-label="Editor">
@@ -62,13 +70,11 @@
 
       <aside class="sidebar right" aria-label="Layers and properties panel">
         <section class="panel">
-          <h2>Layers</h2>
-          <ul class="layer-list">
-            <li><button type="button" class="layer-btn is-active" data-layer="terrain">Terrain Layer</button></li>
-            <li><button type="button" class="layer-btn" data-layer="object">Object Layer</button></li>
-            <li><button type="button" class="layer-btn" data-layer="collision">Collision Layer</button></li>
-            <li><button type="button" class="layer-btn" data-layer="detail">Detail Layer</button></li>
-          </ul>
+          <div class="panel-title-row">
+            <h2>Layers</h2>
+            <button type="button" class="panel-title-action" id="addLayerButton" aria-label="Add layer">+</button>
+          </div>
+          <ul class="layer-list" id="layersList"></ul>
         </section>
 
         <section class="panel">
@@ -239,6 +245,24 @@
           </div>
           <div class="modal-actions">
             <button type="button" class="modal-close" id="terrainSizeApplyButton">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="renameLayerModal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="renameLayerTitle">
+        <div class="modal-header">
+          <h2 id="renameLayerTitle">Rename Layer</h2>
+          <button type="button" class="modal-close" id="renameLayerCloseButton" aria-label="Close rename layer popup">Close</button>
+        </div>
+        <div class="modal-body">
+          <div class="option-row">
+            <label for="renameLayerInput">Name</label>
+            <input id="renameLayerInput" type="text" maxlength="15" />
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="modal-close" id="renameLayerApplyButton">Apply</button>
           </div>
         </div>
       </div>

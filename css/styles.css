@@ -139,6 +139,36 @@ body {
   background: var(--panel-elev);
 }
 
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--panel-elev);
+}
+
+.panel-title-row h2 {
+  border-bottom: 0;
+}
+
+.panel-title-action {
+  margin-right: 10px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.panel-title-action:hover,
+.panel-title-action:focus-visible {
+  background: var(--menu-hover-bg);
+  outline: none;
+}
+
 .tool-list,
 .layer-list {
   display: grid;
@@ -148,9 +178,76 @@ body {
   list-style: none;
 }
 
+.layer-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.layer-row.is-dragging {
+  opacity: 0.55;
+}
+
+.layer-row.is-drop-target {
+  outline: 1px dashed var(--panel-border);
+  outline-offset: 1px;
+}
+
+.layer-eye-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-elev);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.layer-eye-btn:hover,
+.layer-eye-btn:focus-visible {
+  background: var(--menu-hover-bg);
+  outline: none;
+}
+
+.layer-eye-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.layer-actions {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 4px;
+}
+
+.layer-action-btn {
+  min-width: 28px;
+  height: 32px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-elev);
+  color: var(--text);
+  font-size: 11px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+.layer-action-btn:hover,
+.layer-action-btn:focus-visible {
+  background: var(--menu-hover-bg);
+  outline: none;
+}
+
+.layer-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .tool-btn,
 .layer-btn {
   width: 100%;
+  min-width: 0;
   text-align: left;
   border: 1px solid var(--panel-border);
   background: var(--panel-elev);
@@ -158,6 +255,12 @@ body {
   padding: 8px;
   cursor: pointer;
   font-size: 13px;
+}
+
+.layer-btn {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tool-btn:hover,
@@ -184,6 +287,23 @@ body {
   padding: 8px 10px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.info-box {
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.info-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.info-description {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .editor {
