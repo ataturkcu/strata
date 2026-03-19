@@ -27,6 +27,21 @@ const palettePickerButton = document.getElementById('palettePickerButton');
 const palettesModal = document.getElementById('palettesModal');
 const palettesCloseButton = document.getElementById('palettesCloseButton');
 const palettesList = document.getElementById('palettesList');
+const legendObjectsPanel = document.getElementById('legendObjectsPanel');
+const objectsPlaceholder = document.getElementById('objectsPlaceholder');
+const placedObjectsPanel = document.getElementById('placedObjectsPanel');
+const placedObjectsList = document.getElementById('placedObjectsList');
+const openAssetGroupsModalButton = document.getElementById('openAssetGroupsModalButton');
+const assetGroupSelect = document.getElementById('assetGroupSelect');
+const newAssetGroupInput = document.getElementById('newAssetGroupInput');
+const createAssetGroupButton = document.getElementById('createAssetGroupButton');
+const assetGroupsModal = document.getElementById('assetGroupsModal');
+const assetGroupsCloseButton = document.getElementById('assetGroupsCloseButton');
+const openLegendIconsFolder = document.getElementById('openLegendIconsFolder');
+const legendIconsModal = document.getElementById('legendIconsModal');
+const legendIconsCloseButton = document.getElementById('legendIconsCloseButton');
+const legendIconsSearchInput = document.getElementById('legendIconsSearchInput');
+const legendIconsGrid = document.getElementById('legendIconsGrid');
 const colorControls = document.getElementById('colorControls');
 const rectangleControls = document.getElementById('rectangleControls');
 const lineControls = document.getElementById('lineControls');
@@ -108,6 +123,18 @@ let palettes = [
 ];
 let activePaletteId = 'strata-default';
 const colorHistory = [];
+const legendIconNames = [];
+let selectedLegendIcon = '';
+const placedAssetObjects = [];
+const assetGroups = [{ id: 'general', name: 'General' }];
+let activeAssetGroupId = 'general';
+let legendAssetRenderToken = 0;
+const legendAssetsCanvas = document.createElement('canvas');
+const legendAssetsContext = legendAssetsCanvas.getContext('2d');
+const collapsedPlacedObjectGroups = new Set();
+const collapsedCustomAssetGroups = new Set();
+let highlightedPlacedObjectId = null;
+let clearPlacedObjectHighlightTimeout = null;
 
 const minZoom = 0.25;
 const maxZoom = 4;
@@ -165,6 +192,541 @@ function normalizeHexColor(color) {
   }
 
   return trimmed.toLowerCase();
+}
+
+function toKebabCaseIconName(name) {
+  return String(name)
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .replace(/_/g, '-')
+    .toLowerCase();
+}
+
+function toPascalCaseIconName(name) {
+  return String(name)
+    .split('-')
+    .filter((chunk) => chunk.length > 0)
+    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+    .join('');
+}
+
+function isLegendLayerActive() {
+  const activeLayer = getActiveLayer();
+  return Boolean(activeLayer && activeLayer.name === 'Legend');
+}
+
+function updateObjectsPanelVisibility() {
+  const legendActive = isLegendLayerActive();
+  legendObjectsPanel.classList.toggle('is-hidden', !legendActive);
+  objectsPlaceholder.classList.toggle('is-hidden', legendActive);
+}
+
+function updatePlacedObjectsPanelVisibility() {
+  placedObjectsPanel.classList.toggle('is-hidden', placedAssetObjects.length === 0);
+}
+
+function getAssetGroupById(groupId) {
+  return assetGroups.find((group) => group.id === groupId) || assetGroups[0];
+}
+
+function renderAssetGroupOptions() {
+  assetGroupSelect.innerHTML = '';
+
+  assetGroups.forEach((group) => {
+    const option = document.createElement('option');
+    option.value = group.id;
+    option.textContent = group.name;
+    assetGroupSelect.appendChild(option);
+  });
+
+  if (!assetGroups.some((group) => group.id === activeAssetGroupId)) {
+    activeAssetGroupId = assetGroups[0].id;
+  }
+  assetGroupSelect.value = activeAssetGroupId;
+}
+
+function createAssetGroup() {
+  const rawName = newAssetGroupInput.value.trim();
+  if (!rawName) {
+    return;
+  }
+
+  const name = rawName.slice(0, 20);
+  const idBase = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `group-${assetGroups.length + 1}`;
+  let id = idBase;
+  let suffix = 2;
+  while (assetGroups.some((group) => group.id === id)) {
+    id = `${idBase}-${suffix}`;
+    suffix += 1;
+  }
+
+  assetGroups.push({ id, name });
+  activeAssetGroupId = id;
+  newAssetGroupInput.value = '';
+  renderAssetGroupOptions();
+  setInteractionInfo('Asset Group Created', `${name} is ready for new legend assets.`);
+}
+
+function removeAssetGroup(groupId) {
+  if (groupId === 'general') {
+    return;
+  }
+
+  const group = getAssetGroupById(groupId);
+  const beforeCount = placedAssetObjects.length;
+
+  for (let i = placedAssetObjects.length - 1; i >= 0; i -= 1) {
+    if (placedAssetObjects[i].groupId === groupId) {
+      placedAssetObjects.splice(i, 1);
+    }
+  }
+
+  const removedCount = beforeCount - placedAssetObjects.length;
+
+  const groupIndex = assetGroups.findIndex((entry) => entry.id === groupId);
+  if (groupIndex >= 0) {
+    assetGroups.splice(groupIndex, 1);
+  }
+
+  collapsedCustomAssetGroups.delete(groupId);
+  [...collapsedPlacedObjectGroups]
+    .filter((key) => key.startsWith(`${groupId}::`))
+    .forEach((key) => collapsedPlacedObjectGroups.delete(key));
+
+  if (activeAssetGroupId === groupId) {
+    activeAssetGroupId = 'general';
+  }
+
+  renderAssetGroupOptions();
+  renderPlacedObjectsList();
+  renderLegendAssetsCanvas();
+  setInteractionInfo('Asset Group Removed', `${group.name} removed (${removedCount} objects deleted).`);
+}
+
+function resizeLegendAssetsCanvas(width = canvas.width, height = canvas.height) {
+  legendAssetsCanvas.width = width;
+  legendAssetsCanvas.height = height;
+}
+
+function isLegendLayerVisible() {
+  const legendLayer = layers.find((layer) => layer.name === 'Legend');
+  return Boolean(legendLayer && legendLayer.visible);
+}
+
+function removePlacedAssetObject(objectId) {
+  const index = placedAssetObjects.findIndex((item) => item.id === objectId);
+  if (index < 0) {
+    return;
+  }
+
+  const [removed] = placedAssetObjects.splice(index, 1);
+  if (highlightedPlacedObjectId === objectId) {
+    highlightedPlacedObjectId = null;
+  }
+  renderPlacedObjectsList();
+  renderLegendAssetsCanvas();
+  setInteractionInfo('Object Removed', `${removed.iconName} was removed from the map.`);
+}
+
+function togglePlacedObjectGroup(groupKey) {
+  if (collapsedPlacedObjectGroups.has(groupKey)) {
+    collapsedPlacedObjectGroups.delete(groupKey);
+  } else {
+    collapsedPlacedObjectGroups.add(groupKey);
+  }
+  renderPlacedObjectsList();
+}
+
+function toggleCustomAssetGroup(groupId) {
+  if (collapsedCustomAssetGroups.has(groupId)) {
+    collapsedCustomAssetGroups.delete(groupId);
+  } else {
+    collapsedCustomAssetGroups.add(groupId);
+  }
+  renderPlacedObjectsList();
+}
+
+function focusPlacedAssetObject(objectId) {
+  const item = placedAssetObjects.find((entry) => entry.id === objectId);
+  if (!item) {
+    return;
+  }
+
+  const targetScrollLeft = canvas.offsetLeft + item.x * zoomLevel - canvasWrap.clientWidth / 2;
+  const targetScrollTop = canvas.offsetTop + item.y * zoomLevel - canvasWrap.clientHeight / 2;
+
+  const maxScrollLeft = Math.max(0, canvasWrap.scrollWidth - canvasWrap.clientWidth);
+  const maxScrollTop = Math.max(0, canvasWrap.scrollHeight - canvasWrap.clientHeight);
+
+  canvasWrap.scrollLeft = Math.max(0, Math.min(maxScrollLeft, targetScrollLeft));
+  canvasWrap.scrollTop = Math.max(0, Math.min(maxScrollTop, targetScrollTop));
+
+  highlightedPlacedObjectId = objectId;
+  renderVisibleLayers();
+
+  if (clearPlacedObjectHighlightTimeout !== null) {
+    window.clearTimeout(clearPlacedObjectHighlightTimeout);
+  }
+  clearPlacedObjectHighlightTimeout = window.setTimeout(() => {
+    highlightedPlacedObjectId = null;
+    renderVisibleLayers();
+    clearPlacedObjectHighlightTimeout = null;
+  }, 1200);
+
+  const group = getAssetGroupById(item.groupId || 'general');
+  setInteractionInfo('Object Focused', `${item.iconName} in ${group.name} brought into view and highlighted.`);
+}
+
+function getPlacedObjectGroups() {
+  const groups = new Map();
+
+  placedAssetObjects.forEach((item) => {
+    const groupId = item.groupId || 'general';
+    const group = getAssetGroupById(groupId);
+
+    if (!groups.has(group.id)) {
+      groups.set(group.id, {
+        id: group.id,
+        name: group.name,
+        items: [],
+      });
+    }
+
+    groups.get(group.id).items.push(item);
+  });
+
+  return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function renderPlacedObjectsList() {
+  placedObjectsList.innerHTML = '';
+
+  const groups = getPlacedObjectGroups();
+  groups.forEach((group) => {
+    const customGroupItem = document.createElement('li');
+    customGroupItem.className = 'placed-object-group';
+
+    const customGroupToggle = document.createElement('button');
+    customGroupToggle.type = 'button';
+    customGroupToggle.className = 'placed-object-group-toggle';
+    customGroupToggle.setAttribute('aria-expanded', collapsedCustomAssetGroups.has(group.id) ? 'false' : 'true');
+    customGroupToggle.innerHTML = `
+      <span class="tool-icon" aria-hidden="true"><i data-lucide="${collapsedCustomAssetGroups.has(group.id) ? 'chevron-right' : 'chevron-down'}"></i></span>
+      <span class="tool-icon" aria-hidden="true"><i data-lucide="folder"></i></span>
+      <span class="placed-object-name">${group.name}</span>
+      <span class="placed-object-group-header-actions">
+        <span class="placed-object-count">x${group.items.length}</span>
+      </span>
+    `;
+    customGroupToggle.addEventListener('click', () => {
+      toggleCustomAssetGroup(group.id);
+    });
+
+    const customActions = customGroupToggle.querySelector('.placed-object-group-header-actions');
+    if (group.id !== 'general' && customActions instanceof HTMLElement) {
+      const removeGroupButton = document.createElement('span');
+      removeGroupButton.className = 'placed-object-remove-group';
+      removeGroupButton.textContent = 'Remove Group';
+      removeGroupButton.setAttribute('role', 'button');
+      removeGroupButton.setAttribute('tabindex', '0');
+      removeGroupButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        removeAssetGroup(group.id);
+      });
+      removeGroupButton.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          event.stopPropagation();
+          removeAssetGroup(group.id);
+        }
+      });
+      customActions.appendChild(removeGroupButton);
+    }
+
+    customGroupItem.appendChild(customGroupToggle);
+
+    const customChildList = document.createElement('ul');
+    customChildList.className = `placed-object-children${collapsedCustomAssetGroups.has(group.id) ? ' is-hidden' : ''}`;
+
+    const iconGroups = new Map();
+    group.items.forEach((item) => {
+      if (!iconGroups.has(item.iconName)) {
+        iconGroups.set(item.iconName, []);
+      }
+      iconGroups.get(item.iconName).push(item);
+    });
+
+    [...iconGroups.entries()].sort((a, b) => a[0].localeCompare(b[0])).forEach(([iconName, items]) => {
+      const groupKey = `${group.id}::${iconName}`;
+
+    const groupItem = document.createElement('li');
+    groupItem.className = 'placed-object-group';
+
+    const groupToggle = document.createElement('button');
+    groupToggle.type = 'button';
+    groupToggle.className = 'placed-object-group-toggle';
+    groupToggle.setAttribute('aria-expanded', collapsedPlacedObjectGroups.has(groupKey) ? 'false' : 'true');
+    groupToggle.innerHTML = `
+      <span class="tool-icon" aria-hidden="true"><i data-lucide="${collapsedPlacedObjectGroups.has(groupKey) ? 'chevron-right' : 'chevron-down'}"></i></span>
+      <span class="tool-icon" aria-hidden="true"><i data-lucide="${iconName}"></i></span>
+      <span class="placed-object-name">${iconName}</span>
+      <span class="placed-object-count">x${items.length}</span>
+    `;
+    groupToggle.addEventListener('click', () => {
+      togglePlacedObjectGroup(groupKey);
+    });
+
+    groupItem.appendChild(groupToggle);
+
+    const childList = document.createElement('ul');
+    childList.className = `placed-object-children${collapsedPlacedObjectGroups.has(groupKey) ? ' is-hidden' : ''}`;
+
+    items.forEach((item, index) => {
+      const child = document.createElement('li');
+      child.className = 'placed-object-row';
+
+      const name = document.createElement('button');
+      name.type = 'button';
+      name.className = 'placed-object-focus';
+      name.textContent = `${iconName} ${index + 1}`;
+      name.addEventListener('click', () => {
+        focusPlacedAssetObject(item.id);
+      });
+
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.className = 'placed-object-remove';
+      removeButton.textContent = 'Remove';
+      removeButton.addEventListener('click', () => {
+        removePlacedAssetObject(item.id);
+      });
+
+      child.appendChild(name);
+      child.appendChild(removeButton);
+      childList.appendChild(child);
+    });
+
+    groupItem.appendChild(childList);
+      customChildList.appendChild(groupItem);
+    });
+
+    customGroupItem.appendChild(customChildList);
+    placedObjectsList.appendChild(customGroupItem);
+  });
+
+  updatePlacedObjectsPanelVisibility();
+  refreshLucideIcons();
+}
+
+function renderLegendAssetsCanvas() {
+  legendAssetRenderToken += 1;
+  const token = legendAssetRenderToken;
+
+  legendAssetsContext.clearRect(0, 0, legendAssetsCanvas.width, legendAssetsCanvas.height);
+
+  if (placedAssetObjects.length === 0) {
+    renderVisibleLayers();
+    return;
+  }
+
+  let pending = placedAssetObjects.length;
+  placedAssetObjects.forEach((item) => {
+    const svg = buildLegendIconSvg(item.iconName, item.size, item.color);
+    if (!svg) {
+      pending -= 1;
+      if (pending === 0 && token === legendAssetRenderToken) {
+        renderVisibleLayers();
+      }
+      return;
+    }
+
+    const image = new Image();
+    image.onload = () => {
+      if (token !== legendAssetRenderToken) {
+        return;
+      }
+
+      legendAssetsContext.save();
+      legendAssetsContext.globalAlpha = item.opacity;
+      legendAssetsContext.drawImage(image, item.x - item.size / 2, item.y - item.size / 2, item.size, item.size);
+      legendAssetsContext.restore();
+
+      pending -= 1;
+      if (pending === 0) {
+        renderVisibleLayers();
+      }
+    };
+    image.onerror = () => {
+      pending -= 1;
+      if (pending === 0 && token === legendAssetRenderToken) {
+        renderVisibleLayers();
+      }
+    };
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  });
+}
+
+function getLucideIconEntry(iconName) {
+  if (!window.lucide || !window.lucide.icons) {
+    return null;
+  }
+
+  const icons = window.lucide.icons;
+  const direct = icons[iconName];
+  if (direct) {
+    return direct;
+  }
+
+  const pascal = icons[toPascalCaseIconName(iconName)];
+  if (pascal) {
+    return pascal;
+  }
+
+  return null;
+}
+
+function buildLegendIconSvg(iconName, size, color) {
+  const iconEntry = getLucideIconEntry(iconName);
+  if (!iconEntry) {
+    return null;
+  }
+
+  if (typeof iconEntry.toSvg === 'function') {
+    return iconEntry.toSvg({
+      width: size,
+      height: size,
+      color,
+      'stroke-width': 2,
+      fill: 'none',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+    });
+  }
+
+  const iconNode = Array.isArray(iconEntry) ? iconEntry : iconEntry.iconNode;
+  if (!Array.isArray(iconNode)) {
+    return null;
+  }
+
+  const parts = iconNode.map(([tag, attrs]) => {
+    const attrText = Object.entries(attrs || {})
+      .map(([key, value]) => `${key}="${String(value)}"`)
+      .join(' ');
+    return `<${tag} ${attrText}></${tag}>`;
+  }).join('');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${parts}</svg>`;
+}
+
+function getLegendIconCursor() {
+  if (!selectedLegendIcon) {
+    return 'crosshair';
+  }
+
+  const cursorSvg = buildLegendIconSvg(selectedLegendIcon, 22, currentColor);
+  if (!cursorSvg) {
+    return 'crosshair';
+  }
+
+  return `url("data:image/svg+xml,${encodeURIComponent(cursorSvg)}") 4 4, crosshair`;
+}
+
+function renderLegendIconsGrid() {
+  const query = legendIconsSearchInput.value.trim().toLowerCase();
+  legendIconsGrid.innerHTML = '';
+
+  legendIconNames
+    .filter((iconName) => !query || iconName.includes(query))
+    .forEach((iconName) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `legend-icon-item${selectedLegendIcon === iconName ? ' is-selected' : ''}`;
+      button.innerHTML = `
+        <span class="tool-icon" aria-hidden="true"><i data-lucide="${iconName}"></i></span>
+        <span class="legend-icon-item-name">${iconName}</span>
+      `;
+
+      button.addEventListener('click', () => {
+        selectedLegendIcon = iconName;
+        currentTool = 'legend-icon';
+        setActive(toolButtons, null, 'is-active');
+        activeToolLabel.textContent = `Active Tool: Legend Icon (${iconName})`;
+        renderLegendIconsGrid();
+        closeLegendIconsModal();
+        setInteractionInfo('Legend Icon Selected', `${iconName} selected. Click on canvas to place it on Legend layer.`);
+      });
+
+      legendIconsGrid.appendChild(button);
+    });
+
+  refreshLucideIcons();
+}
+
+function initializeLegendIconNames() {
+  if (!window.lucide || !window.lucide.icons) {
+    return;
+  }
+
+  const names = Object.keys(window.lucide.icons)
+    .map((name) => toKebabCaseIconName(name))
+    .filter((name) => name && !legendIconNames.includes(name));
+
+  names.sort((a, b) => a.localeCompare(b));
+  legendIconNames.push(...names);
+}
+
+function openLegendIconsModal() {
+  if (!isLegendLayerActive()) {
+    setInteractionInfo('Legend Icons', 'Switch to Legend layer to use icon objects.');
+    return;
+  }
+
+  renderLegendIconsGrid();
+  legendIconsModal.hidden = false;
+}
+
+function closeLegendIconsModal() {
+  legendIconsModal.hidden = true;
+}
+
+function openAssetGroupsModal() {
+  renderAssetGroupOptions();
+  assetGroupsModal.hidden = false;
+  newAssetGroupInput.focus();
+}
+
+function closeAssetGroupsModal() {
+  assetGroupsModal.hidden = true;
+}
+
+function placeLegendIconOnCanvas(x, y) {
+  if (!selectedLegendIcon || !isLegendLayerActive()) {
+    return Promise.resolve(false);
+  }
+
+  const iconSize = Math.max(8, Math.round(currentSize));
+  const iconSvg = buildLegendIconSvg(selectedLegendIcon, iconSize, currentColor);
+  if (!iconSvg) {
+    return Promise.resolve(false);
+  }
+
+  const group = getAssetGroupById(activeAssetGroupId);
+
+  placedAssetObjects.push({
+    id: Date.now() + Math.random(),
+    iconName: selectedLegendIcon,
+    groupId: group.id,
+    groupName: group.name,
+    x,
+    y,
+    size: iconSize,
+    color: currentColor,
+    opacity: currentOpacity,
+  });
+
+  renderPlacedObjectsList();
+  renderLegendAssetsCanvas();
+  return Promise.resolve(true);
 }
 
 function normalizePaletteEntry(entry, index) {
@@ -264,6 +826,7 @@ function setCurrentColor(nextColor, trackHistory = false) {
 
   currentColor = normalized;
   updateBrushAppearance();
+  updateCanvasCursor();
   localStorage.setItem('strata-brush-color', currentColor);
 
   if (trackHistory) {
@@ -653,6 +1216,7 @@ function renderLayersList() {
       layerButton.classList.add('is-active');
       const layerInfo = getLayerSelectionInfo(layer);
       setInteractionInfo(layerInfo.title, layerInfo.description);
+      updateObjectsPanelVisibility();
     });
     layerButton.addEventListener('dblclick', () => {
       renameLayer(layer.id);
@@ -710,6 +1274,26 @@ function renderVisibleLayers() {
       displayContext.drawImage(layer.canvas, 0, 0);
     }
   });
+
+  if (isLegendLayerVisible()) {
+    displayContext.drawImage(legendAssetsCanvas, 0, 0);
+
+    if (highlightedPlacedObjectId !== null) {
+      const highlighted = placedAssetObjects.find((item) => item.id === highlightedPlacedObjectId);
+      if (highlighted) {
+        displayContext.save();
+        displayContext.globalAlpha = 0.95;
+        displayContext.strokeStyle = '#f7de52';
+        displayContext.lineWidth = 2;
+        displayContext.setLineDash([4, 3]);
+        displayContext.beginPath();
+        displayContext.arc(highlighted.x, highlighted.y, Math.max(10, highlighted.size * 0.9), 0, Math.PI * 2);
+        displayContext.stroke();
+        displayContext.setLineDash([]);
+        displayContext.restore();
+      }
+    }
+  }
 }
 
 function addLayer(name) {
@@ -729,10 +1313,17 @@ function initializeLayers() {
   layers.length = 0;
   layers.push(createLayer('Default'));
   layers.push(createLayer('Legend'));
+  placedAssetObjects.length = 0;
+  collapsedCustomAssetGroups.clear();
+  collapsedPlacedObjectGroups.clear();
+  highlightedPlacedObjectId = null;
+  resizeLegendAssetsCanvas();
+  renderPlacedObjectsList();
   activeLayerId = layers[0].id;
   syncActiveContext();
   renderLayersList();
   renderVisibleLayers();
+  updateObjectsPanelVisibility();
   const initialToolInfo = getToolInfo('brush');
   setInteractionInfo(initialToolInfo.title, initialToolInfo.description);
 }
@@ -1057,6 +1648,10 @@ function updateCanvasCursor() {
     canvas.style.cursor = eraserCursor;
     return;
   }
+  if (currentTool === 'legend-icon') {
+    canvas.style.cursor = getLegendIconCursor();
+    return;
+  }
   if (currentTool === 'fill') {
     canvas.style.cursor = bucketCursor;
     return;
@@ -1065,7 +1660,7 @@ function updateCanvasCursor() {
 }
 
 function isColorTool(tool) {
-  return tool === 'brush' || tool === 'line' || tool === 'rectangle' || tool === 'fill' || tool === 'shape';
+  return tool === 'brush' || tool === 'line' || tool === 'rectangle' || tool === 'fill' || tool === 'shape' || tool === 'legend-icon';
 }
 
 function updateColorControlsVisibility() {
@@ -1264,6 +1859,9 @@ function updateBrushPreview(event) {
 
 function setActive(buttons, selectedButton, activeClass) {
   buttons.forEach((button) => button.classList.remove(activeClass));
+  if (!selectedButton) {
+    return;
+  }
   selectedButton.classList.add(activeClass);
 }
 
@@ -1311,8 +1909,23 @@ function startDraw(event) {
   updateCanvasCursor();
   const { x, y } = getCanvasPosition(event);
 
-  if (isColorTool(currentTool)) {
+  if (isColorTool(currentTool) && currentTool !== 'legend-icon') {
     addColorToHistory(currentColor);
+  }
+
+  if (currentTool === 'legend-icon') {
+    placeLegendIconOnCanvas(x, y).then((placed) => {
+      if (!placed) {
+        return;
+      }
+      addColorToHistory(currentColor);
+      commitHistoryState();
+      const activeGroup = getAssetGroupById(activeAssetGroupId);
+      setInteractionInfo('Legend Icon Placed', `${selectedLegendIcon} placed in ${activeGroup.name}.`);
+    });
+    isDrawing = false;
+    releasePointerIfCaptured();
+    return;
   }
 
   if (currentTool === 'rectangle') {
@@ -1761,6 +2374,8 @@ function applyTerrainSize() {
 
   canvas.width = width;
   canvas.height = height;
+  resizeLegendAssetsCanvas(width, height);
+  renderLegendAssetsCanvas();
   layers.forEach((layer) => {
     layer.canvas.width = width;
     layer.canvas.height = height;
@@ -1798,6 +2413,38 @@ palettesModal.addEventListener('click', (event) => {
     closePalettesModal();
   }
 });
+
+openLegendIconsFolder.addEventListener('click', openLegendIconsModal);
+legendIconsCloseButton.addEventListener('click', closeLegendIconsModal);
+openAssetGroupsModalButton.addEventListener('click', openAssetGroupsModal);
+assetGroupsCloseButton.addEventListener('click', closeAssetGroupsModal);
+
+assetGroupSelect.addEventListener('change', () => {
+  activeAssetGroupId = assetGroupSelect.value;
+});
+
+createAssetGroupButton.addEventListener('click', createAssetGroup);
+
+newAssetGroupInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    createAssetGroup();
+  }
+});
+
+legendIconsModal.addEventListener('click', (event) => {
+  if (event.target === legendIconsModal) {
+    closeLegendIconsModal();
+  }
+});
+
+assetGroupsModal.addEventListener('click', (event) => {
+  if (event.target === assetGroupsModal) {
+    closeAssetGroupsModal();
+  }
+});
+
+legendIconsSearchInput.addEventListener('input', renderLegendIconsGrid);
 
 renameLayerCloseButton.addEventListener('click', closeRenameLayerModal);
 renameLayerApplyButton.addEventListener('click', applyRenameLayer);
@@ -1845,8 +2492,18 @@ window.addEventListener('keydown', (event) => {
     return;
   }
 
+  if (event.key === 'Escape' && !legendIconsModal.hidden) {
+    closeLegendIconsModal();
+    return;
+  }
+
   if (event.key === 'Escape' && !renameLayerModal.hidden) {
     closeRenameLayerModal();
+    return;
+  }
+
+  if (event.key === 'Escape' && !assetGroupsModal.hidden) {
+    closeAssetGroupsModal();
     return;
   }
 
@@ -1880,6 +2537,16 @@ function clearCanvas() {
   layers.forEach((layer) => {
     layer.context.clearRect(0, 0, canvas.width, canvas.height);
   });
+  placedAssetObjects.length = 0;
+  collapsedCustomAssetGroups.clear();
+  collapsedPlacedObjectGroups.clear();
+  highlightedPlacedObjectId = null;
+  if (clearPlacedObjectHighlightTimeout !== null) {
+    window.clearTimeout(clearPlacedObjectHighlightTimeout);
+    clearPlacedObjectHighlightTimeout = null;
+  }
+  legendAssetsContext.clearRect(0, 0, legendAssetsCanvas.width, legendAssetsCanvas.height);
+  renderPlacedObjectsList();
   renderVisibleLayers();
 }
 
@@ -1897,6 +2564,7 @@ if (!Number.isNaN(savedTerrainWidth) && !Number.isNaN(savedTerrainHeight)) {
   canvas.width = clampTerrainSize(savedTerrainWidth);
   canvas.height = clampTerrainSize(savedTerrainHeight);
 }
+resizeLegendAssetsCanvas(canvas.width, canvas.height);
 
 const savedTerrainDividerSize = Number(localStorage.getItem('strata-terrain-divider-size') || '1000');
 if (!Number.isNaN(savedTerrainDividerSize)) {
@@ -2014,5 +2682,8 @@ lineSpacingValue.textContent = String(currentLineSpacing);
 updateCanvasCursor();
 loadPalettesFromFiles();
 renderColorHistorySwatches();
+renderAssetGroupOptions();
+initializeLegendIconNames();
+updateObjectsPanelVisibility();
 refreshLucideIcons();
 openTerrainSizeModal();

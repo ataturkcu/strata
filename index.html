@@ -78,8 +78,24 @@
         </section>
 
         <section class="panel">
-          <h2>Objects</h2>
-          <div class="placeholder">Tile / asset tools will be added later.</div>
+          <h2>Assets</h2>
+          <div class="legend-objects-panel is-hidden" id="legendObjectsPanel">
+            <div class="legend-folder-grid" id="legendFolderGrid">
+              <button type="button" class="legend-folder-btn" id="openLegendIconsFolder" aria-label="Open legend icon folder">
+                <span class="tool-icon" aria-hidden="true"><i data-lucide="folder"></i></span>
+                <span class="legend-folder-label">Lucide Icons</span>
+              </button>
+            </div>
+          </div>
+          <div class="placeholder" id="objectsPlaceholder">Tile / asset tools will be added later.</div>
+        </section>
+
+        <section class="panel is-hidden" id="placedObjectsPanel">
+          <div class="panel-title-row">
+            <h2>Objects</h2>
+            <button type="button" class="panel-title-action" id="openAssetGroupsModalButton" aria-label="Open object groups popup">+</button>
+          </div>
+          <ul class="placed-objects-list" id="placedObjectsList"></ul>
         </section>
 
         <section class="panel">
@@ -278,6 +294,22 @@
       </div>
     </div>
 
+    <div class="modal" id="legendIconsModal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="legendIconsTitle">
+        <div class="modal-header">
+          <h2 id="legendIconsTitle">Legend Icons</h2>
+          <button type="button" class="modal-close" id="legendIconsCloseButton" aria-label="Close legend icons popup">Close</button>
+        </div>
+        <div class="modal-body">
+          <div class="option-row">
+            <label for="legendIconsSearchInput">Search</label>
+            <input id="legendIconsSearchInput" type="text" placeholder="Search icon name" />
+          </div>
+          <div class="legend-icons-grid" id="legendIconsGrid"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal" id="palettesModal" hidden>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="palettesTitle">
         <div class="modal-header">
@@ -286,6 +318,28 @@
         </div>
         <div class="modal-body">
           <div class="palette-list" id="palettesList"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="assetGroupsModal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="assetGroupsTitle">
+        <div class="modal-header">
+          <h2 id="assetGroupsTitle">Object Groups</h2>
+          <button type="button" class="modal-close" id="assetGroupsCloseButton" aria-label="Close object groups popup">Close</button>
+        </div>
+        <div class="modal-body">
+          <div class="option-row">
+            <label for="assetGroupSelect">Active Group</label>
+            <select id="assetGroupSelect" aria-label="Select object group"></select>
+          </div>
+          <div class="option-row">
+            <label for="newAssetGroupInput">New Group</label>
+            <input id="newAssetGroupInput" type="text" maxlength="20" placeholder="New group" aria-label="New object group" />
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="modal-close" id="createAssetGroupButton" aria-label="Create object group">Add Group</button>
+          </div>
         </div>
       </div>
     </div>
