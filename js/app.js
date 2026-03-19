@@ -1354,12 +1354,58 @@ function restoreCanvasSnapshot(snapshot) {
   drawContext.putImageData(snapshot, 0, 0);
 }
 
-function pushHistoryState() {
-  const snapshot = getCanvasSnapshot();
-  if (!snapshot) {
+function clonePlacedAssetObjects() {
+  return placedAssetObjects.map((item) => ({ ...item }));
+}
+
+function getHistoryState() {
+  const activeLayer = getActiveLayer();
+  if (!activeLayer || !activeLayer.context) {
+    return null;
+  }
+
+  return {
+    layerId: activeLayer.id,
+    layerSnapshot: activeLayer.context.getImageData(0, 0, canvas.width, canvas.height),
+    placedAssetObjects: clonePlacedAssetObjects(),
+    activeAssetGroupId,
+  };
+}
+
+function restoreHistoryState(state) {
+  if (!state || typeof state !== 'object') {
     return;
   }
-  undoStack.push(snapshot);
+
+  const targetLayer = layers.find((layer) => layer.id === state.layerId);
+  if (targetLayer && targetLayer.context && state.layerSnapshot) {
+    targetLayer.context.putImageData(state.layerSnapshot, 0, 0);
+  }
+
+  placedAssetObjects.length = 0;
+  if (Array.isArray(state.placedAssetObjects)) {
+    state.placedAssetObjects.forEach((item) => {
+      placedAssetObjects.push({ ...item });
+    });
+  }
+
+  if (typeof state.activeAssetGroupId === 'string' && assetGroups.some((group) => group.id === state.activeAssetGroupId)) {
+    activeAssetGroupId = state.activeAssetGroupId;
+  } else if (assetGroups.length > 0) {
+    activeAssetGroupId = assetGroups[0].id;
+  }
+
+  renderAssetGroupOptions();
+  renderPlacedObjectsList();
+  renderLegendAssetsCanvas();
+}
+
+function pushHistoryState() {
+  const state = getHistoryState();
+  if (!state) {
+    return;
+  }
+  undoStack.push(state);
   enforceHistoryLimit();
 }
 
@@ -1375,8 +1421,7 @@ function undo() {
 
   const current = undoStack.pop();
   redoStack.push(current);
-  restoreCanvasSnapshot(undoStack[undoStack.length - 1]);
-  renderVisibleLayers();
+  restoreHistoryState(undoStack[undoStack.length - 1]);
 }
 
 function redo() {
@@ -1386,8 +1431,7 @@ function redo() {
 
   const next = redoStack.pop();
   undoStack.push(next);
-  restoreCanvasSnapshot(next);
-  renderVisibleLayers();
+  restoreHistoryState(next);
 }
 
 function applyTheme(theme) {
